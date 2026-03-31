@@ -13,21 +13,19 @@ type ExportStructuredPdfOptions = {
   footer?: string;
 };
 
-const stripControlChars = (value: string) =>
-  Array.from(value)
-    .filter((char) => {
-      const code = char.charCodeAt(0);
-      return (code >= 32 && code !== 127) || char === "\n" || char === "\t";
-    })
-    .join("");
-
-const sanitizeText = (value: string) =>
-  stripControlChars((value || "")
+// Clean text for PDF compatibility (Remove Unicode chars that crash standard fonts)
+const sanitizeForPdf = (str: string) => {
+  if (!str) return "";
+  return str
+    .replace(/₹/g, "Rs.") // Replace Rupee symbol with Rs. (Standard fonts don't support ₹)
+    .replace(/[^\x00-\x7F]/g, "") // Remove all non-ASCII characters that cause "random shit"
     .replace(/\r\n/g, "\n")
-    .trim());
+    .trim();
+};
 
-export const toPlainText = (value: string) =>
-  sanitizeText(value)
+export const toPlainText = (value: string) => {
+  const sanitized = sanitizeForPdf(value);
+  return sanitized
     .replace(/```[\s\S]*?```/g, (match) => match.replace(/```/g, ""))
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
@@ -36,6 +34,7 @@ export const toPlainText = (value: string) =>
     .replace(/^>\s?/gm, "")
     .replace(/\[(.*?)\]\((.*?)\)/g, "$1 ($2)")
     .replace(/^[-*+]\s+/gm, "- ");
+};
 
 const safeFileName = (value: string) =>
   Array.from(value)
@@ -48,15 +47,13 @@ const safeFileName = (value: string) =>
     .join("")
     .replace(/\s+/g, "_");
 
-// Helper for page overflow check
 const checkYOverflow = (y: number, padding: number): boolean => {
-  return y + padding > 800; // A4 height is ~841pt
+  return y + padding > 780; // Buffer for A4 height
 };
 
 export const exportStructuredPdf = async (options: ExportStructuredPdfOptions) => {
   const { title, fileName, metadata = [], sections, footer } = options;
   
-  // Prepare Filenaming
   const cleanName = fileName.toLowerCase().endsWith(".pdf") ? fileName : `${fileName}.pdf`;
   const secureFileName = safeFileName(cleanName);
 
@@ -70,31 +67,39 @@ export const exportStructuredPdf = async (options: ExportStructuredPdfOptions) =
 
     let currentY = 50;
     const margin = 45;
-    const pageWidth = 505; // ~595 - (2*45)
+    const pageWidth = 505;
 
-    // Header Branding
-    doc.setDrawColor(255, 153, 51); // Saffron
+    // Line height helpers
+    const TITLE_STEP = 24;
+    const BODY_STEP = 14;
+    const META_STEP = 12;
+
+    // Header
+    doc.setDrawColor(255, 153, 51);
     doc.setLineWidth(2);
     doc.line(margin, currentY, margin + pageWidth, currentY);
     currentY += 15;
 
-    doc.setTextColor(0, 0, 128); // Navy
+    doc.setTextColor(0, 0, 128);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.text("LEGALAI INDIA", margin, currentY);
     
     doc.setTextColor(153, 153, 153);
     doc.setFontSize(8);
-    doc.text("OFFICIAL REPORT • " + new Date().toLocaleDateString(), margin + pageWidth, currentY, { align: "right" });
-    
+    doc.text("REPORT • " + new Date().toLocaleDateString(), margin + pageWidth, currentY, { align: "right" });
     currentY += 25;
 
     // Title
     doc.setTextColor(0, 0, 128);
-    doc.setFontSize(22);
+    doc.setFontSize(20);
     const titleLines = doc.splitTextToSize(toPlainText(title), pageWidth);
-    doc.text(titleLines, margin, currentY);
-    currentY += (titleLines.length * 24) + 15;
+    titleLines.forEach((line: string) => {
+      if (checkYOverflow(currentY, TITLE_STEP)) { doc.addPage(); currentY = 50; }
+      doc.text(line, margin, currentY);
+      currentY += TITLE_STEP;
+    });
+    currentY += 10;
 
     // Metadata
     if (metadata.length > 0) {
@@ -103,62 +108,65 @@ export const exportStructuredPdf = async (options: ExportStructuredPdfOptions) =
       doc.line(margin, currentY, margin + pageWidth, currentY);
       currentY += 15;
       
-      doc.setTextColor(102, 102, 102);
+      doc.setTextColor(100, 100, 100);
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
       
       metadata.forEach(m => {
-        if (checkYOverflow(currentY, 12)) { doc.addPage(); currentY = 40; }
-        doc.text(toPlainText(m), margin, currentY);
-        currentY += 12;
+        const lines = doc.splitTextToSize(toPlainText(m), pageWidth);
+        lines.forEach((l: string) => {
+          if (checkYOverflow(currentY, META_STEP)) { doc.addPage(); currentY = 50; }
+          doc.text(l, margin, currentY);
+          currentY += META_STEP;
+        });
       });
-      currentY += 10;
+      currentY += 15;
     }
 
-    // Sections
+    // Body Sections
     sections.forEach(s => {
       if (s.label) {
-        if (checkYOverflow(currentY, 20)) { doc.addPage(); currentY = 45; }
-        doc.setTextColor(34, 34, 34);
+        if (checkYOverflow(currentY, 20)) { doc.addPage(); currentY = 50; }
+        doc.setTextColor(30, 30, 30);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
         doc.text(toPlainText(s.label), margin, currentY);
-        currentY += 15;
+        currentY += 18;
       }
 
-      doc.setTextColor(85, 85, 85);
+      doc.setTextColor(60, 60, 60);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10.5);
       const textLines = doc.splitTextToSize(toPlainText(s.text), pageWidth);
       
       textLines.forEach((line: string) => {
-        if (checkYOverflow(currentY, 14)) { 
+        if (checkYOverflow(currentY, BODY_STEP)) { 
           doc.addPage(); 
+          currentY = 50;
           doc.setDrawColor(255, 153, 51);
-          doc.line(margin, 30, margin + pageWidth, 30);
-          currentY = 45;
+          doc.line(margin, 35, margin + pageWidth, 35);
         }
         doc.text(line, margin, currentY);
-        currentY += 14;
+        currentY += BODY_STEP;
       });
-      currentY += 20;
+      currentY += 15;
     });
 
     // Footer
     if (footer) {
-      if (checkYOverflow(currentY, 40)) { doc.addPage(); currentY = 45; }
-      doc.setDrawColor(238, 238, 238);
+      if (checkYOverflow(currentY, 30)) { doc.addPage(); currentY = 50; }
+      doc.setDrawColor(230, 230, 230);
       doc.line(margin, currentY, margin + pageWidth, currentY);
       currentY += 15;
-      doc.setTextColor(153, 153, 153);
+      doc.setTextColor(160, 160, 160);
       doc.setFontSize(8);
       doc.text(toPlainText(footer), margin, currentY, { maxWidth: pageWidth });
     }
 
     doc.save(secureFileName);
 
-  } catch (error) {
-    console.error("PDF Engine Crash:", error);
-    alert("Generation failed. Please try again or copy text manually.");
+  } catch (err) {
+    console.error("PDF Fail:", err);
+    alert("Export failed. Please copy the text manually.");
   }
 };
