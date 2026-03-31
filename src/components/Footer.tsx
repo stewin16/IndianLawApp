@@ -43,8 +43,8 @@ const Footer = () => {
                     {/* Brand Column */}
                     <div className="lg:col-span-4">
                         <Link to="/" className="inline-flex items-center gap-4 mb-8 group">
-                            <div className="w-14 h-14 rounded-2xl bg-navy-india flex items-center justify-center shadow-premium group-hover:rotate-6 transition-all duration-500 border border-white/20">
-                                <Scale className="w-7 h-7 text-white" />
+                            <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center shadow-premium group-hover:rotate-6 transition-all duration-500 border border-navy-india/10 p-2">
+                                <img src="/logo.png" alt="LegalAi Logo" className="w-full h-full object-contain" />
                             </div>
                             <div className="flex flex-col">
                                 <span className="text-3xl font-serif font-bold text-navy-india tracking-tighter">LegalAi</span>

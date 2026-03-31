@@ -9,8 +9,8 @@ import {
     ArrowLeft, Sparkles, Loader2, CheckCircle, AlertTriangle,
     ExternalLink, Copy, Search, BookOpen
 } from "lucide-react";
-import { generateLegalContent } from "@/services/geminiService";
 import { toast } from "sonner";
+import { generateLegalContent } from "@/services/groqService";
 
 const PrecedentMatcherPage = () => {
     const [caseDescription, setCaseDescription] = useState("");
@@ -25,13 +25,19 @@ const PrecedentMatcherPage = () => {
         setResult(null);
 
         try {
-            const prompt = `Find similar legal precedents and case laws for the following situation. Jurisdiction: ${jurisdiction}. Provide case names, citations, brief summaries, and how they relate to this matter:\n\n${caseDescription}`;
+            const systemPrompt = `You are an expert Indian Legal Researcher. 
+            Find and summarize relevant legal precedents and case laws based on the situation described. 
+            Focus on Supreme Court and High Court judgments. 
+            Provide case names, citations (if possible), and a brief summary of the ratio decidendi.
+            Jurisdiction Filter: ${jurisdiction === 'all' ? 'All India' : jurisdiction.replace('_', ' ').toUpperCase()}`;
 
-            const data = await generateLegalContent(prompt, "You are a legal researcher specializing in Indian case law and precedents. Provide accurate citations and summaries of relevant judgments from the Supreme Court and High Courts.");
-            setResult(data);
-        } catch (error) {
+            const result = await generateLegalContent(caseDescription, systemPrompt);
+            setResult(result);
+            toast.success("Precedents found!");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
             console.error("Precedent Search Error:", error);
-            toast.error("Connection error. Please check your internet connection.");
+            toast.error(`Search Failed: ${message}`);
         } finally {
             setIsLoading(false);
         }
@@ -200,7 +206,7 @@ Example: 'Employer terminated employee for posting on social media about company
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="mt-8 grid grid-cols-2 gap-4"
+                    className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
                     <a
                         href="https://indiankanoon.org"

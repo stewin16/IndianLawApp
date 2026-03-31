@@ -54,11 +54,11 @@
 
 | Frontend | Backend | AI/ML |
 |----------|---------|-------|
-| React 18 | FastAPI | OpenRouter API |
-| TypeScript | Python 3.11+ | Llama/Phi-3 Models |
-| Vite 5 | uvicorn | LangChain |
-| TailwindCSS | PostgreSQL | RAG Pipeline |
-| Framer Motion | Redis | Vector Embeddings |
+| React 18 | FastAPI | Google Gemini API |
+| TypeScript | Python 3.11+ | 1.5 Flash / Pro |
+| Vite 5 | uvicorn | RAG Pipeline |
+| TailwindCSS | PostgreSQL | Async Client |
+| Framer Motion | Redis | Semantic Search |
 | Radix UI | | |
 
 ---
@@ -69,6 +69,7 @@
 - Node.js 18+ and npm 9+
 - Python 3.11+ (for RAG service)
 - Git
+- Google Gemini API Key
 
 ### Quick Start
 
@@ -99,8 +100,10 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # 3. Configure environment variables
+# Root .env contains VITE_GEMINI_API_KEY
+# rag_service/.env contains GEMINI_API_KEY
 cp .env.example .env
-# Edit .env with your API keys
+cp rag_service/.env.example rag_service/.env
 
 # 4. Run all services
 npm run dev:all
@@ -113,14 +116,20 @@ npm run dev:all
 Create a `.env` file in the root directory:
 
 ```env
-# OpenRouter API (for AI models)
-OPENROUTER_API_KEY=your_openrouter_api_key
+# Google Gemini API (used by the frontend app)
+VITE_GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+VITE_GEMINI_MODEL="gemini-1.5-flash"
 
-# Database (optional)
-DATABASE_URL=postgresql://user:password@localhost:5432/legalai
+# Primary backend URL
+VITE_RAG_SERVICE_URL=http://localhost:8000
+```
 
-# Redis (optional, for caching)
-REDIS_URL=redis://localhost:6379
+Create another `.env` in `rag_service/`:
+
+```env
+# Gemini API Key (for the Python RAG service)
+GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+GEMINI_MODEL="gemini-1.5-flash"
 ```
 
 ---

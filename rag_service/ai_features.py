@@ -1,5 +1,5 @@
 """
-AI Features Module - 20+ Legal AI Features using Ollama
+AI Features Module - 20+ Legal AI Features using Groq
 Provides comprehensive legal assistance features for Indian law
 """
 
@@ -8,9 +8,10 @@ import json
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
-# Ollama API Configuration
-OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "llama3.2"
+# Groq API Configuration
+from groq_client import GroqClient
+groq = GroqClient()
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 # Government Portal Links
 GOVT_PORTALS = {
@@ -81,31 +82,15 @@ class LaborAdviceRequest(BaseModel):
     issue_description: str
 
 
-async def call_ollama(prompt: str, model: str = DEFAULT_MODEL, system_prompt: str = None) -> str:
-    """Make a call to Ollama API"""
+async def call_groq(prompt: str, model: str = DEFAULT_MODEL, system_prompt: str = None) -> str:
+    """Make a call to Groq API using GroqClient"""
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
-            
-            response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "stream": False
-                }
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                return result.get("message", {}).get("content", "")
-            else:
-                return f"Error: {response.status_code}"
+        # Note: GroqClient is synchronous in its current implementation, 
+        # but we wrap it for consistency in the async features module.
+        content = groq.generate_legal_content(prompt, system_prompt or "You are a professional Indian Legal Assistant.")
+        return content
     except Exception as e:
-        return f"Error connecting to Ollama: {str(e)}"
+        return f"Error connecting to Groq: {str(e)}"
 
 
 # ==================== 20+ AI FEATURES ====================
@@ -114,9 +99,14 @@ async def case_outcome_predictor(request: CasePredictionRequest) -> Dict[str, An
     """
     Feature 1: Predict likely case outcome based on facts
     """
-    system_prompt = """You are an expert Indian legal analyst. Based on the case facts provided, 
-    analyze and predict the likely outcome. Consider relevant precedents, statutory provisions, 
-    and judicial trends. Provide a balanced analysis with probability estimates."""
+    system_prompt = """You are a Senior Advocate and Judicial Analyst at the Supreme Court of India.
+    CRITICAL RULE: You MUST use the Bharatiya Nyaya Sanhita (BNS) for criminal offenses. 
+    Do NOT use IPC sections as primary references.
+    Analyze the case facts provided and predict the likely outcome by considering:
+    1. Statutory provisions (BNS/BSA/BNSS) exclusively. Mention the equivalent legacy IPC/CrPC sections ONLY for historical mapping.
+    2. Ratio Decidendi of recent Apex Court precedents.
+    3. Constitutional safeguards (Part III) and procedural fairness.
+    Provide a balanced, objective jurisdictional analysis with confidence scores."""
     
     prompt = f"""
     Case Type: {request.case_type}
@@ -134,7 +124,7 @@ async def case_outcome_predictor(request: CasePredictionRequest) -> Dict[str, An
     6. Risk Assessment
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "prediction": result,
@@ -150,8 +140,11 @@ async def legal_risk_analyzer(document_text: str, document_type: str) -> Dict[st
     """
     Feature 2: Analyze legal risks in contracts/agreements
     """
-    system_prompt = """You are an expert contract lawyer specializing in Indian law. 
-    Analyze documents for legal risks, compliance issues, and potential loopholes."""
+    system_prompt = """You are an expert Corporate Counsel specializing in Indian Business Law (Indian Contract Act 1872, Companies Act 2013). 
+    CRITICAL: Analyze the document with respect to the CURRENT Indian legal landscape (2024-2025). 
+    Identify risks under the Indian Contract Act, Consumer Protection Act 2019, 
+    Digital Personal Data Protection (DPDP) Act 2023, and Stamp Duty laws.
+    Provide realistic, actionable insights for real-life scenario situations."""
     
     prompt = f"""
     Document Type: {document_type}
@@ -168,7 +161,7 @@ async def legal_risk_analyzer(document_text: str, document_type: str) -> Dict[st
     6. Recommendations for Improvement
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "analysis": result,
@@ -181,8 +174,11 @@ async def bail_eligibility_checker(request: BailCheckRequest) -> Dict[str, Any]:
     """
     Feature 3: Check bail eligibility for an offense
     """
-    system_prompt = """You are an expert criminal law practitioner in India. 
-    Analyze bail eligibility under BNS, BNSS, and relevant provisions."""
+    system_prompt = """You are a Senior Criminal Law Expert. 
+    CRITICAL: The Bharatiya Nagarik Suraksha Sanhita (BNSS), Bharatiya Nyaya Sanhita (BNS), and Bharatiya Sakshya Adhiniyam (BSA) ARE THE CURRENT LAWS OF INDIA as of July 1, 2024.
+    Analyze bail eligibility under the BNSS (formerly CrPC). Consider Section 436-455 BNSS grounds, 
+    Constitutional safeguards under Article 21 (Personal Liberty), and jurisdictional bail benchmarks 
+    set by the Supreme Court in recent landmark judgments."""
     
     prompt = f"""
     Offense: {request.offense}
@@ -199,7 +195,7 @@ async def bail_eligibility_checker(request: BailCheckRequest) -> Dict[str, Any]:
     7. Time frame for bail hearing
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "eligibility": result,
@@ -215,8 +211,10 @@ async def fir_complaint_generator(request: FIRRequest) -> Dict[str, Any]:
     """
     Feature 4: Generate FIR complaint draft
     """
-    system_prompt = """You are an expert in drafting FIR complaints under Indian criminal law. 
-    Create legally sound, comprehensive FIR drafts that cover all essential elements."""
+    system_prompt = """You are an expert in drafting FIRs and Complaints under the Bharatiya Nagarik Suraksha Sanhita (BNSS). 
+    CRITICAL: The BNSS and BNS are the CURRENT AND ACTIVE laws of India (effective July 1, 2024).
+    Ensure the draft is legally sound for Indian Police Stations, correctly mapping incidents to BNS sections 
+    and ensuring all jurisdictional and evidentiary basics required by Section 173 BNSS are covered."""
     
     prompt = f"""
     Generate an FIR complaint draft with the following details:
@@ -235,7 +233,7 @@ async def fir_complaint_generator(request: FIRRequest) -> Dict[str, Any]:
     5. Declaration by complainant
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "fir_draft": result,
@@ -252,9 +250,9 @@ async def legal_translation(request: LegalTranslationRequest) -> Dict[str, Any]:
     """
     lang_names = {"en": "English", "hi": "Hindi"}
     
-    system_prompt = f"""You are an expert legal translator specializing in {lang_names.get(request.source_lang, request.source_lang)} 
-    to {lang_names.get(request.target_lang, request.target_lang)} translation. 
-    Maintain legal terminology accuracy and formal tone."""
+    system_prompt = f"""You are a Senior Legal Translator specializing in Indian Judicial English and Hindi. 
+    Maintain absolute statutory accuracy, especially for terms in the Constitution of India and 
+    Bharatiya Nyaya Sanhita. Ensure the translation adheres to the legal register of District/High Courts."""
     
     prompt = f"""
     Translate the following legal text from {lang_names.get(request.source_lang, request.source_lang)} 
@@ -269,7 +267,7 @@ async def legal_translation(request: LegalTranslationRequest) -> Dict[str, Any]:
     4. Note any terms that have no direct equivalent
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "translated_text": result,
@@ -282,8 +280,9 @@ async def judgment_simplifier(judgment_text: str) -> Dict[str, Any]:
     """
     Feature 6: Simplify complex court judgments
     """
-    system_prompt = """You are a legal communication expert. Simplify complex legal judgments 
-    into plain language that common citizens can understand, while maintaining accuracy."""
+    system_prompt = """You are a Legal Rapporteur and Court Clerking expert. 
+    Simplify complex Indian judgments by clearly extracting the 'Ratio Decidendi' (Reason for Decision) 
+    and 'Obiter Dicta' in plain language while maintaining citations and judicial rigor."""
     
     prompt = f"""
     Simplify this court judgment for a layperson:
@@ -299,7 +298,7 @@ async def judgment_simplifier(judgment_text: str) -> Dict[str, Any]:
     6. Key Legal Terms Explained
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "simplified_judgment": result,
@@ -314,8 +313,9 @@ async def section_finder(query: str) -> Dict[str, Any]:
     """
     Feature 7: Find relevant IPC/BNS sections for a situation
     """
-    system_prompt = """You are an expert in Indian criminal law codes - IPC, BNS (Bharatiya Nyaya Sanhita), 
-    CrPC, BNSS, and special laws. Find all relevant sections for any given situation."""
+    system_prompt = """You are a Legal Statutory Specialist. Find specific sections in the 
+    Bharatiya Nyaya Sanhita (BNS) [Replacement for IPC] and Bharatiya Nagarik Suraksha Sanhita (BNSS) [formerly CrPC]. 
+    Always provide the BNS-to-IPC mapping for historical reference and statutory continuity."""
     
     prompt = f"""
     Situation: {query}
@@ -330,7 +330,7 @@ async def section_finder(query: str) -> Dict[str, Any]:
     7. Whether offense is Cognizable/Non-cognizable
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "sections": result,
@@ -346,8 +346,9 @@ async def legal_cost_estimator(case_type: str, court_level: str, complexity: str
     """
     Feature 8: Estimate legal fees and costs
     """
-    system_prompt = """You are a legal services pricing expert in India. 
-    Provide realistic cost estimates for legal proceedings."""
+    system_prompt = """You are a Legal Auditor. Provide cost estimates for litigation in India 
+    considering Advocate Fee Rules of various High Courts, the Court Fees Act 1870, 
+    and standard Bar Council of India benchmarks for civil, criminal, and corporate matters."""
     
     prompt = f"""
     Estimate legal costs for:
@@ -367,7 +368,7 @@ async def legal_cost_estimator(case_type: str, court_level: str, complexity: str
     9. Free Legal Aid Options
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "cost_estimate": result,
@@ -380,8 +381,9 @@ async def precedent_matcher(case_facts: str, legal_issue: str) -> Dict[str, Any]
     """
     Feature 9: Find similar case precedents
     """
-    system_prompt = """You are a legal researcher specializing in Indian case law. 
-    Find relevant precedents from Supreme Court and High Courts."""
+    system_prompt = """You are a Senior Legal Researcher specializing in the Apex Court and High Courts of India. 
+    Find precedents focusing on landmark judgments that set 'Stare Decisis' for the legal issue provided. 
+    Identify key 'Ingredients of the Offense' or 'Points for Determination' from relevant case laws."""
     
     prompt = f"""
     Find precedents for:
@@ -397,7 +399,7 @@ async def precedent_matcher(case_facts: str, legal_issue: str) -> Dict[str, Any]
     6. Search Keywords for Further Research
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "precedents": result,
@@ -410,8 +412,9 @@ async def consumer_complaint_helper(request: ConsumerComplaintRequest) -> Dict[s
     """
     Feature 10: Generate consumer complaint
     """
-    system_prompt = """You are a consumer rights expert under the Consumer Protection Act, 2019. 
-    Draft effective consumer complaints."""
+    system_prompt = """You are an expert in the Consumer Protection Act, 2019. 
+    Draft detailed Consumer Complaints for the District/State Commission, highlighting 'Deficiency of Service', 
+    'Unfair Trade Practice', and ensuring compliance with Section 35 of the Act."""
     
     prompt = f"""
     Draft a consumer complaint for:
@@ -431,7 +434,7 @@ async def consumer_complaint_helper(request: ConsumerComplaintRequest) -> Dict[s
     7. Filing procedure
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     # Determine forum based on amount
     if request.amount_involved <= 5000000:  # 50 lakhs
@@ -453,8 +456,9 @@ async def rti_application_generator(department: str, information_sought: str, ap
     """
     Feature 11: Generate RTI application
     """
-    system_prompt = """You are an RTI expert in India. Draft effective RTI applications 
-    that maximize chances of getting requested information."""
+    system_prompt = """You are a Senior RTI Consultant. Draft RTI Applications under 
+    Section 6(1) of the Right to Information Act, 2005. Frame questions to avoid Section 8 exemptions 
+    and ensure the application is addressed properly to the Central/State Public Information Officer."""
     
     prompt = f"""
     Generate RTI Application for:
@@ -471,7 +475,7 @@ async def rti_application_generator(department: str, information_sought: str, ap
     6. Appeal process (if denied)
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "rti_application": result,
@@ -485,8 +489,9 @@ async def cyber_complaint_helper(request: CyberComplaintRequest) -> Dict[str, An
     """
     Feature 12: Help with cyber crime complaints
     """
-    system_prompt = """You are a cyber crime investigation expert in India. 
-    Guide victims through the complaint process."""
+    system_prompt = """You are a Cyber Law Expert specializing in the IT Act, 2000, and the Digital Personal Data Protection Act (DPDP) 2023. 
+    Analyze cyber crimes and draft complaints for the National Cyber Crime Reporting Portal (NCRP), 
+    citing specific sections like 66A, 66E, or 67A as applicable."""
     
     prompt = f"""
     Cyber Crime Complaint for:
@@ -504,7 +509,7 @@ async def cyber_complaint_helper(request: CyberComplaintRequest) -> Dict[str, An
     7. Immediate Protective Measures
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "guidance": result,
@@ -518,8 +523,9 @@ async def property_document_verifier(request: PropertyVerifyRequest) -> Dict[str
     """
     Feature 13: Verify property documents
     """
-    system_prompt = """You are a property law expert specializing in real estate documentation in India. 
-    Verify documents for authenticity markers and legal compliance."""
+    system_prompt = """You are a Real Estate Attorney and Property Auditor. 
+    Analyze documents like Sale Deeds, Allotment Letters, and Khata extracts under the 
+    Registration Act 1908, RERA 2016, and the Transfer of Property Act 1882."""
     
     prompt = f"""
     Verify Property Document:
@@ -537,7 +543,7 @@ async def property_document_verifier(request: PropertyVerifyRequest) -> Dict[str
     7. Recommendations
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "verification_report": result,
@@ -550,8 +556,9 @@ async def marriage_registration_guide(state: str, marriage_type: str) -> Dict[st
     """
     Feature 14: Marriage registration guidance
     """
-    system_prompt = """You are an expert in Indian marriage laws including Hindu Marriage Act, 
-    Special Marriage Act, and state-specific procedures."""
+    system_prompt = """You are a Family Law Attorney specialized in the Hindu Marriage Act, 1955, 
+    the Special Marriage Act, 1954, and Muslim Personal Law procedures. Guide users through 
+    civil and religious registration requirements in various Indian states."""
     
     prompt = f"""
     Marriage Registration Guide for:
@@ -569,7 +576,7 @@ async def marriage_registration_guide(state: str, marriage_type: str) -> Dict[st
     8. Common Issues and Solutions
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "guide": result,
@@ -581,7 +588,9 @@ async def divorce_procedure_guide(marriage_type: str, divorce_type: str) -> Dict
     """
     Feature 15: Divorce procedure guidance
     """
-    system_prompt = """You are a family law expert in India specializing in divorce proceedings."""
+    system_prompt = """You are a Senior Family Law Counsel. Provide guidance on divorce proceedings 
+    under HMA, SMA, and other Personal Laws. Focus on Section 13/13B (Mutual Consent) grounds, 
+    Interim Maintenance (Section 24), and Child Custody guidelines set by the Supreme Court."""
     
     prompt = f"""
     Divorce Procedure Guide for:
@@ -601,7 +610,7 @@ async def divorce_procedure_guide(marriage_type: str, divorce_type: str) -> Dict
     10. Estimated Costs
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "procedure": result,
@@ -614,8 +623,9 @@ async def labor_law_advisor(request: LaborAdviceRequest) -> Dict[str, Any]:
     """
     Feature 16: Workplace rights advisor
     """
-    system_prompt = """You are an expert in Indian labor laws including Labour Codes 2020, 
-    Factories Act, and establishment-specific rules."""
+    system_prompt = """You are an Industrial Relations and Labor Law Authority. 
+    Analyze issues under the new Labor Codes (2020), the Industrial Disputes Act, 
+    and state-specific Shops & Establishments Acts. Advise on statutory compliance and worker rights."""
     
     prompt = f"""
     Labor Law Advice for:
@@ -634,7 +644,7 @@ async def labor_law_advisor(request: LaborAdviceRequest) -> Dict[str, Any]:
     8. Important Deadlines
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "advice": result,
@@ -647,8 +657,9 @@ async def legal_news_summarizer(news_text: str) -> Dict[str, Any]:
     """
     Feature 17: Summarize legal news and developments
     """
-    system_prompt = """You are a legal journalist who explains legal developments 
-    in a way that's accessible to common citizens."""
+    system_prompt = """You are a Legal Correspondent and Legislative Analyst. 
+    Analyze Indian legal developments and statutory shifts to explain their practical impact 
+    on citizens with constitutional and jurisprudential context."""
     
     prompt = f"""
     Summarize this legal news/development:
@@ -663,7 +674,7 @@ async def legal_news_summarizer(news_text: str) -> Dict[str, Any]:
     6. Action Items (if any)
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "summary": result,
@@ -675,8 +686,9 @@ async def court_hearing_scheduler(case_type: str, court: str, location: str) -> 
     """
     Feature 18: Court dates and procedures info
     """
-    system_prompt = """You are a court procedural expert familiar with court schedules, 
-    procedures, and requirements across Indian courts."""
+    system_prompt = """You are a Court Administrative Specialist. Explain court procedures, 
+    filing formalities, and hearing protocols (High Courts, District Courts, NCLT, DRT) 
+    in line with the latest judicial notifications and the BNSS guidelines."""
     
     prompt = f"""
     Court Procedure Information for:
@@ -695,7 +707,7 @@ async def court_hearing_scheduler(case_type: str, court: str, location: str) -> 
     8. Tips for Court Appearance
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "information": result,
@@ -708,7 +720,9 @@ async def legal_jargon_explainer(term: str) -> Dict[str, Any]:
     """
     Feature 19: Explain legal terms in simple language
     """
-    system_prompt = """You are a legal educator who makes legal concepts accessible to everyone."""
+    system_prompt = """You are a Legal Educator specializing in Jurisprudence. 
+    Explain Indian legal maxims and terms (like Res Judicata, Caveat Emptor, Writ) 
+    in both English and the official Hindi 'Vidhi' terminology."""
     
     prompt = f"""
     Explain this legal term/concept: {term}
@@ -722,7 +736,7 @@ async def legal_jargon_explainer(term: str) -> Dict[str, Any]:
     6. Related Terms
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "explanation": result,
@@ -734,8 +748,9 @@ async def multi_document_analyzer(documents: List[str], analysis_type: str) -> D
     """
     Feature 20: Analyze multiple documents together
     """
-    system_prompt = """You are an expert legal analyst who can compare and analyze 
-    multiple legal documents together for consistency, conflicts, and insights."""
+    system_prompt = """You are a Lead Legal Auditor and Analysis Specialist. 
+    Compare multiple Indian legal documents for cross-statutory consistency, 
+    conflict with BNS/BNSS, or violation of constitutional basic structures."""
     
     combined_docs = "\n\n---DOCUMENT SEPARATOR---\n\n".join(documents)
     
@@ -755,7 +770,7 @@ async def multi_document_analyzer(documents: List[str], analysis_type: str) -> D
     7. Priority Actions
     """
     
-    result = await call_ollama(prompt, system_prompt=system_prompt)
+    result = await call_groq(prompt, system_prompt=system_prompt)
     
     return {
         "analysis": result,

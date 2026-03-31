@@ -24,11 +24,11 @@ const Loading = ({ message = "Loading...", fullScreen = false, size = "md" }: Lo
             <div className="relative mb-4">
                 <motion.div
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                    className={`${sizeClasses[size].icon} rounded-full border-4 border-navy-india/20 border-t-navy-india`}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    className={`${sizeClasses[size].icon} rounded-full border-4 border-navy-india/10 border-t-saffron`}
                 />
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <Scale className={`${size === "sm" ? "w-3 h-3" : size === "md" ? "w-5 h-5" : "w-8 h-8"} text-navy-india`} />
+                <div className="absolute inset-0 flex items-center justify-center p-1.5">
+                    <img src="/logo.png" className="w-full h-full object-contain mb-1" alt="" />
                 </div>
             </div>
 

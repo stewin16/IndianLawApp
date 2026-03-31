@@ -9,8 +9,8 @@ import {
     ArrowLeft, Sparkles, Loader2, CheckCircle,
     ExternalLink, Copy, Languages, ArrowRightLeft
 } from "lucide-react";
-import { generateLegalContent } from "@/services/geminiService";
 import { toast } from "sonner";
+import { generateLegalContent } from "@/services/groqService";
 
 const TranslatorPage = () => {
     const [text, setText] = useState("");
@@ -28,22 +28,18 @@ const TranslatorPage = () => {
         const targetLang = direction === "en-hi" ? "Hindi" : "English";
 
         try {
-            const prompt = `Translate the following legal text from ${sourceLang} to ${targetLang}. 
-Preserve all legal terminology accurately. Maintain formal legal register.
+            const systemPrompt = `You are a professional Legal Translator specializing in English and Hindi. 
+            Translate the following legal text from ${sourceLang} to ${targetLang}. 
+            Ensure that legal terminology is accurately translated (e.g., 'plaintiff' to 'वादी', 'affidavit' to 'शपथ पत्र'). 
+            Maintain a formal, professional tone suitable for court documents. Only provide the translated text.`;
 
-Text to translate:
-${text}
-
-Please provide:
-1. The translated text
-2. Note any legal terms that have specific translations
-3. Keep formatting intact`;
-
-            const data = await generateLegalContent(prompt, `You are a professional legal translator specializing in ${sourceLang} to ${targetLang} translation for Indian legal documents. Ensure high accuracy and formal register.`);
-            setResult(data);
-        } catch (error) {
+            const result = await generateLegalContent(text, systemPrompt);
+            setResult(result);
+            toast.success("Translation complete!");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
             console.error("Translation Error:", error);
-            toast.error("Connection error. Please check your internet connection.");
+            toast.error(`Translation Failed: ${message}`);
         } finally {
             setIsLoading(false);
         }

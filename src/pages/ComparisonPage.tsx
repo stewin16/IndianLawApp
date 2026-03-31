@@ -20,7 +20,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { LawSearch, LawSection } from "@/components/LawSearch";
-import { compareLegalTexts } from "@/services/geminiService";
+import { compareLegalTexts } from "@/services/groqService";
+import { exportStructuredPdf, toPlainText } from "@/lib/pdfExport";
 
 
 interface ComparisonResult {
@@ -86,7 +87,7 @@ const ComparisonPage = () => {
         };
 
         try {
-            // Priority: Try AI Analysis First using Gemini
+            // Priority: Try AI Analysis First using Groq
             const comparison = await compareLegalTexts(text1, text2);
 
             if (comparison) {
@@ -135,6 +136,43 @@ const ComparisonPage = () => {
             });
         }
         setResult(null);
+    };
+
+    const handleExportReport = async () => {
+        if (!result) {
+            toast({
+                title: "No report to export",
+                description: "Run a comparison first.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        try {
+            await exportStructuredPdf({
+                title: "LegalAI Comparison Report",
+                fileName: "bns-ipc-comparison-report.pdf",
+                metadata: [`Generated: ${new Date().toLocaleString()}`],
+                sections: [
+                    { label: "Verdict", text: toPlainText(result.verdict) },
+                    { label: "Change Type", text: toPlainText(result.change_type) },
+                    { label: "Legal Impact", text: toPlainText(result.legal_impact) },
+                    { label: "Penalty Difference", text: toPlainText(result.penalty_difference) },
+                    {
+                        label: "Key Changes",
+                        text: toPlainText(result.key_changes.map((change, index) => `${index + 1}. ${change}`).join("\n")),
+                    },
+                ],
+            });
+            toast({ title: "Comparison report exported" });
+        } catch (error) {
+            console.error("Comparison PDF Export Error:", error);
+            toast({
+                title: "Export failed",
+                description: "Unable to export comparison report. Please try again.",
+                variant: "destructive",
+            });
+        }
     };
 
     const getChangeTypeInfo = (type: string) => {
@@ -391,7 +429,7 @@ const ComparisonPage = () => {
                                         </Button>
                                         <Button
                                             className="rounded-full btn-green shadow-green px-8 h-12 font-bold"
-                                            onClick={() => toast({ title: "Export feature coming soon" })}
+                                            onClick={handleExportReport}
                                         >
                                             <Download className="w-4 h-4 mr-2" />
                                             Export Report
@@ -556,7 +594,7 @@ const ComparisonPage = () => {
                                         <div className="h-10 w-px bg-gray-200" />
                                         <div className="flex flex-col items-end">
                                             <span className="text-[10px] font-mono font-bold text-navy-india/40 uppercase tracking-widest">Analysis_Node</span>
-                                            <span className="text-xs font-bold text-navy-india">GEMINI_3.0_ULTRA</span>
+                                            <span className="text-xs font-bold text-navy-india">GROQ_CLOUD_MODEL</span>
                                         </div>
                                     </div>
                                 </div>

@@ -129,7 +129,7 @@ const AIToolsHub = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2 }}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-0 border border-navy-india/10 mb-24 rounded-[3rem] overflow-hidden shadow-premium-lg bg-white/60 backdrop-blur-xl"
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-24"
                 >
                     {filteredTools.map((tool, index) => {
                         const Icon = tool.icon;
@@ -141,7 +141,7 @@ const AIToolsHub = () => {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.03 * index, duration: 0.5 }}
-                                className="border-r border-b border-navy-india/10 group hover:bg-navy-india transition-all duration-700 relative overflow-hidden"
+                                className="group rounded-[2rem] border border-navy-india/10 bg-white/80 backdrop-blur-xl hover:bg-navy-india transition-all duration-500 relative overflow-hidden shadow-premium"
                             >
                                 <Link
                                     to={tool.route}

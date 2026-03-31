@@ -172,6 +172,7 @@ const generateDemoLawyers = (lat: number, lon: number, radius: number): Lawyer[]
 
 const LawyerFinderPage = () => {
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+    const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
     const [locationName, setLocationName] = useState<string>("Detecting location...");
     const [lawyers, setLawyers] = useState<Lawyer[]>([]);
     const [radius, setRadius] = useState<number>(5);
@@ -192,7 +193,9 @@ const LawyerFinderPage = () => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    setUserLocation([position.coords.latitude, position.coords.longitude]);
+                    const currentLocation: [number, number] = [position.coords.latitude, position.coords.longitude];
+                    setUserLocation(currentLocation);
+                    setMapCenter(currentLocation);
                     setLocationName("Your Current Location");
                     setLocationError("");
                 },
@@ -200,14 +203,18 @@ const LawyerFinderPage = () => {
                     console.error("Error getting location:", error);
                     setLocationError("Unable to access your location. Please select a city manually.");
                     // Default to Mumbai
-                    setUserLocation([19.0760, 72.8777]);
+                    const defaultLocation: [number, number] = [19.0760, 72.8777];
+                    setUserLocation(defaultLocation);
+                    setMapCenter(defaultLocation);
                     setLocationName("Mumbai (Default)");
                 },
                 { enableHighAccuracy: true, timeout: 10000 }
             );
         } else {
             setLocationError("Geolocation is not supported by your browser.");
-            setUserLocation([19.0760, 72.8777]);
+            const defaultLocation: [number, number] = [19.0760, 72.8777];
+            setUserLocation(defaultLocation);
+            setMapCenter(defaultLocation);
             setLocationName("Mumbai (Default)");
         }
     }, []);
@@ -230,6 +237,7 @@ const LawyerFinderPage = () => {
         setIsLoading(true);
         setHasSearched(true);
         setSelectedLawyer(null);
+        setMapCenter(userLocation);
 
         const [lat, lon] = userLocation;
         const radiusInMeters = radius * 1000;
@@ -321,7 +329,9 @@ const LawyerFinderPage = () => {
     };
 
     const handleCitySelect = (city: typeof INDIAN_CITIES[0]) => {
-        setUserLocation([city.lat, city.lon]);
+        const selectedLocation: [number, number] = [city.lat, city.lon];
+        setUserLocation(selectedLocation);
+        setMapCenter(selectedLocation);
         setLocationName(city.name);
         setMapZoom(13);
         setLawyers([]); // Clear previous results
@@ -341,7 +351,9 @@ const LawyerFinderPage = () => {
             if (data && data.length > 0) {
                 const lat = parseFloat(data[0].lat);
                 const lon = parseFloat(data[0].lon);
-                setUserLocation([lat, lon]);
+                const selectedLocation: [number, number] = [lat, lon];
+                setUserLocation(selectedLocation);
+                setMapCenter(selectedLocation);
                 setLocationName(data[0].display_name.split(',')[0]);
                 setMapZoom(13);
                 setLawyers([]);
@@ -591,8 +603,9 @@ const LawyerFinderPage = () => {
                     <div className="lg:col-span-2 bg-white rounded-2xl border-2 border-navy-india/10 shadow-lg overflow-hidden relative">
                         {userLocation ? (
                             <Map
+                                height={620}
                                 defaultCenter={userLocation}
-                                center={selectedLawyer ? [selectedLawyer.lat, selectedLawyer.lon] : userLocation}
+                                center={mapCenter || userLocation}
                                 zoom={mapZoom}
                             >
                                 <Marker width={40} anchor={userLocation} color="#000080" />

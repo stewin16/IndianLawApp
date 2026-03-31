@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import html2canvas from 'html2canvas';
 import Header from "@/components/Header";
 import TricolorBackground from "@/components/TricolorBackground";
 import Footer from "@/components/Footer";
@@ -8,9 +7,9 @@ import { FileText, Upload, CheckCircle, Sparkles, AlertCircle, Loader2, Download
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import jsPDF from 'jspdf';
-import { summarizeLegalDocument } from "@/services/geminiService";
+import { generateLegalContent } from "@/services/groqService";
 import * as pdfjsLib from 'pdfjs-dist';
+import { exportStructuredPdf, toPlainText } from "@/lib/pdfExport";
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -31,6 +30,9 @@ const SummarizePage = () => {
     const [isFocusMode, setIsFocusMode] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const hasStr = (value: unknown): value is { str: string } =>
+        typeof value === "object" && value !== null && "str" in value && typeof (value as { str?: unknown }).str === "string";
 
     // Load history from local storage on mount
     useEffect(() => {
@@ -112,9 +114,8 @@ const SummarizePage = () => {
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
                 const pageText = textContent.items
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    .map((item: any) => {
-                        if (item && 'str' in item) return item.str;
+                    .map((item) => {
+                        if (hasStr(item)) return item.str;
                         return '';
                     })
                     .join(' ');
@@ -140,7 +141,8 @@ const SummarizePage = () => {
                 throw new Error("The document appears to be empty or unreadable.");
             }
 
-            const summaryText = await summarizeLegalDocument(text);
+            const systemPrompt = "You are a specialized Legal AI Assistant. Provide a structured, executive summary of the provided legal text. Use Markdown for formatting. Focus on: 1. Parties Involved, 2. Key Provisions, 3. Critical Risks/Liabilities, 4. Strategic Observations.";
+            const summaryText = await generateLegalContent(text, systemPrompt);
             setSummary(summaryText);
             saveToHistory(file.name, summaryText);
         } catch (error: unknown) {
@@ -155,123 +157,19 @@ const SummarizePage = () => {
     const handleDownload = async () => {
         if (!summary) return;
 
-        // Create a hidden wrapper
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'fixed';
-        wrapper.style.top = '0';
-        wrapper.style.left = '0';
-        wrapper.style.width = '0';
-        wrapper.style.height = '0';
-        wrapper.style.overflow = 'hidden'; // Hide content
-        wrapper.style.zIndex = '-9999';
-        document.body.appendChild(wrapper);
-
-        // Create distinct PDF container inside wrapper
-        const pdfContainer = document.createElement('div');
-        pdfContainer.style.width = '595px'; // A4 width in pt
-        pdfContainer.style.padding = '40px';
-        pdfContainer.style.backgroundColor = '#ffffff';
-        pdfContainer.style.color = '#000000';
-        pdfContainer.style.opacity = '1';
-        pdfContainer.style.position = 'relative'; // Relative to wrapper
-
-        // Force standard font
-        pdfContainer.style.fontFamily = 'Arial, Helvetica, sans-serif';
-
-        // Header - Using Table for robust layout to avoid overlaps
-        const header = document.createElement('div');
-        header.innerHTML = `
-            <div style="margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-                <h1 style="font-size: 28px; font-weight: bold; margin: 0 0 10px 0; color: #000000; font-family: Arial, sans-serif;">Legal Document Summary</h1>
-                <table style="width: 100%; border-collapse: collapse; font-family: Arial, sans-serif;">
-                    <tr>
-                        <td style="width: 100px; font-size: 11px; color: #444; font-weight: bold; padding: 2px 0;">Source File:</td>
-                        <td style="font-size: 11px; color: #000; padding: 2px 0;">${file?.name || 'Unknown'}</td>
-                    </tr>
-                    <tr>
-                        <td style="width: 100px; font-size: 11px; color: #444; font-weight: bold; padding: 2px 0;">Generated:</td>
-                        <td style="font-size: 11px; color: #000; padding: 2px 0;">${new Date().toLocaleString()}</td>
-                    </tr>
-                </table>
-            </div>
-        `;
-        pdfContainer.appendChild(header);
-
-        // Content
-        const contentSource = document.getElementById('summary-content');
-        if (contentSource) {
-            const contentClone = contentSource.cloneNode(true) as HTMLElement;
-            // Force styles for PDF
-            contentClone.className = ''; // Remove all classes
-            contentClone.style.color = '#1a1a1a';
-            contentClone.style.fontSize = '12px';
-            contentClone.style.lineHeight = '1.6';
-
-            // Clean up children styles manually since we removed classes
-            const allElements = contentClone.querySelectorAll('*');
-            allElements.forEach((el: Element) => {
-                const htmlEl = el as HTMLElement;
-                // Style cleanup
-                htmlEl.style.color = '#1a1a1a';
-                if (htmlEl.tagName === 'H1') { htmlEl.style.fontSize = '20px'; htmlEl.style.fontWeight = 'bold'; htmlEl.style.marginTop = '15px'; }
-                if (htmlEl.tagName === 'H2') { htmlEl.style.fontSize = '18px'; htmlEl.style.fontWeight = 'bold'; htmlEl.style.marginTop = '12px'; }
-                if (htmlEl.tagName === 'H3') { htmlEl.style.fontSize = '16px'; htmlEl.style.fontWeight = 'bold'; htmlEl.style.marginTop = '10px'; }
-                if (htmlEl.tagName === 'P') { htmlEl.style.marginBottom = '10px'; }
-                if (htmlEl.tagName === 'UL') { htmlEl.style.paddingLeft = '20px'; htmlEl.style.marginBottom = '10px'; }
-                if (htmlEl.tagName === 'OL') { htmlEl.style.paddingLeft = '20px'; htmlEl.style.marginBottom = '10px'; }
-                if (htmlEl.tagName === 'LI') { htmlEl.style.marginBottom = '5px'; }
-
-                // Content Sanitization: Remove emojis and garbage chars
-                if (htmlEl.childNodes && htmlEl.childNodes.length > 0) {
-                    htmlEl.childNodes.forEach((node: ChildNode) => {
-                        if (node.nodeType === 3) { // Text node
-                            // Remove emojis and non-basic punctuation/alphanumeric
-                            // Keep basic latin, numbers, punctuation, common symbols
-                            // Strip out ranges usually associated with emojis and symbols
-                            let text = node.textContent || '';
-                            // Simplistic emoji stripper
-                            text = text.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '');
-                            node.textContent = text;
-                        }
-                    });
-                }
-            });
-
-            pdfContainer.appendChild(contentClone);
-        }
-
-        wrapper.appendChild(pdfContainer);
-
-        // Allow render (even though hidden)
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        const doc = new jsPDF('p', 'pt', 'a4');
-
         try {
-            await doc.html(pdfContainer, {
-                callback: function (doc) {
-                    doc.save(`Summary_${file?.name.replace(/\.[^/.]+$/, "") || 'Legal_Document'}.pdf`);
-                    if (document.body.contains(wrapper)) {
-                        document.body.removeChild(wrapper);
-                    }
-                },
-                x: 0,
-                y: 0,
-                width: 595, // Match container width
-                windowWidth: 595,
-                margin: [20, 0, 20, 0],
-                autoPaging: 'text',
-                html2canvas: {
-                    scale: 1,
-                    useCORS: true,
-                    logging: false
-                }
+            await exportStructuredPdf({
+                title: "Legal Document Summary",
+                fileName: `Summary_${file?.name.replace(/\.[^/.]+$/, "") || "Legal_Document"}.pdf`,
+                metadata: [
+                    `Source File: ${file?.name || "Unknown"}`,
+                    `Generated: ${new Date().toLocaleString()}`,
+                ],
+                sections: [{ text: toPlainText(summary) }],
+                footer: "Generated by LegalAi - Not a substitute for professional legal advice.",
             });
-        } catch (e) {
-            console.error("PDF Generation failed", e);
-            if (document.body.contains(wrapper)) {
-                document.body.removeChild(wrapper);
-            }
+        } catch (error) {
+            console.error("PDF Generation failed", error);
         }
     };
 
@@ -418,7 +316,7 @@ const SummarizePage = () => {
                                 <input
                                     ref={fileInputRef}
                                     type="file"
-                                    accept=".pdf,.docx,.txt"
+                                    accept=".pdf,.txt"
                                     className="hidden"
                                     onChange={handleFileChange}
                                 />
@@ -433,7 +331,7 @@ const SummarizePage = () => {
                                 <p className="text-gray-500 mb-10 max-w-sm mx-auto font-light leading-relaxed">
                                     {file 
                                         ? `Ready to analyze ${(file.size / 1024 / 1024).toFixed(2)} MB file. Our AI will extract key clauses and risks.` 
-                                        : "Drag and drop your PDF, DOCX or TXT file here, or click to browse our secure portal."
+                                        : "Drag and drop your PDF or TXT file here, or click to browse our secure portal."
                                     }
                                 </p>
 
@@ -481,7 +379,7 @@ const SummarizePage = () => {
                                         Secure Processing
                                     </span>
                                     <span className="w-1 h-1 rounded-full bg-gray-300" />
-                                    <span>PDF, DOCX, TXT</span>
+                                    <span>PDF, TXT</span>
                                     <span className="w-1 h-1 rounded-full bg-gray-300" />
                                     <span>Max 20MB</span>
                                 </div>

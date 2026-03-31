@@ -40,9 +40,8 @@ headers = {
 }
 
 # Models to test
-# 1. google/gemini-2.0-flash-exp:free (Free, Fast)
-# 2. meta-llama/llama-3.1-8b-instruct:free (Free, Good)
-# 3. openai/gpt-4o-mini (Paid, Cheap, Reliable)
+# 1. meta-llama/llama-3.1-8b-instruct:free (Free, Good)
+# 2. openai/gpt-4o-mini (Paid, Cheap, Reliable)
 model = "meta-llama/llama-3.1-8b-instruct:free"
 
 data = {

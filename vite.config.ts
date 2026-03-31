@@ -9,6 +9,15 @@ export default defineConfig(({ mode }) => ({
     host: "0.0.0.0",
     port: 3000,
     hmr: process.env.DISABLE_HMR !== 'true',
+    proxy: {
+      "/rag": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/rag/, ""),
+        proxyTimeout: 120000,
+        timeout: 120000,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
@@ -70,6 +79,8 @@ export default defineConfig(({ mode }) => ({
   preview: {
     port: 4173,
     host: true,
+    proxy: {
+    },
   },
   // Define environment variables
   define: {

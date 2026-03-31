@@ -95,8 +95,8 @@ const TricolorBackground = ({
                 </div>
             )}
             
-            {/* Subtle grain overlay for texture */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+            {/* Subtle overlay for depth - avoiding external asset 403 errors */}
+            <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-black/5 mix-blend-overlay" />
         </div>
     );
 };

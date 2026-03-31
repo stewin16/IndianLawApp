@@ -9,8 +9,8 @@ import {
     ArrowLeft, Sparkles, Loader2, CheckCircle, AlertTriangle,
     ExternalLink, Download, Copy, Scale
 } from "lucide-react";
-import { predictCaseOutcome } from "@/services/geminiService";
 import { toast } from "sonner";
+import { generateLegalContent, parseModelJson } from "@/services/groqService";
 
 interface PredictionResult {
     prediction: string;
@@ -33,15 +33,28 @@ const CasePredictorPage = () => {
         setResult(null);
 
         try {
-            const data = await predictCaseOutcome(`Case Type: ${caseType}. Facts: ${caseFacts}`);
-            if (data) {
-                setResult(data);
-            } else {
-                toast.error("Error processing your request. Please try again.");
-            }
-        } catch (error) {
+            const systemPrompt = `You are a Senior Indian Legal Analyst. 
+            Based on the case facts provided, predict the likely outcome, estimate the confidence probability (0-100), identify relevant sections, and suggest a strategy.
+            Output must be a valid JSON object with this exact structure:
+            {
+              "prediction": "string",
+              "probability": number,
+              "reasoning": ["array of strings"],
+              "relevant_sections": ["array of strings"],
+              "suggested_strategy": "string"
+            }`;
+
+            const prompt = `Case Type: ${caseType}\nCase Facts:\n${caseFacts}`;
+            
+            const content = await generateLegalContent(prompt, systemPrompt);
+            const parsed = parseModelJson<PredictionResult>(content, "case prediction", "object");
+            
+            setResult(parsed);
+            toast.success("Case outcome predicted!");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
             console.error("Prediction Error:", error);
-            toast.error("Connection error. Please check your internet connection.");
+            toast.error(`Prediction Failed: ${message}`);
         } finally {
             setIsLoading(false);
         }
@@ -51,6 +64,7 @@ const CasePredictorPage = () => {
         if (result) {
             const text = `Prediction: ${result.prediction}\nProbability: ${result.probability}%\nReasoning:\n${result.reasoning.join('\n')}\nSections: ${result.relevant_sections.join(', ')}\nStrategy: ${result.suggested_strategy}`;
             navigator.clipboard.writeText(text);
+            toast.success("Copied to clipboard");
         }
     };
 
@@ -239,7 +253,7 @@ const CasePredictorPage = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="mt-8 grid grid-cols-2 gap-4"
+                    className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
                     <a
                         href="https://indiankanoon.org"

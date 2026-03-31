@@ -9,8 +9,8 @@ import {
     ArrowLeft, Sparkles, Loader2, CheckCircle,
     ExternalLink, Copy, Search, Scale, AlertTriangle
 } from "lucide-react";
-import { generateLegalContent } from "@/services/geminiService";
 import { toast } from "sonner";
+import { generateLegalContent } from "@/services/groqService";
 
 const SectionFinderPage = () => {
     const [query, setQuery] = useState("");
@@ -34,22 +34,18 @@ const SectionFinderPage = () => {
         setResult(null);
 
         try {
-            const prompt = `Find all applicable legal sections for this situation:
-${query}
+            const systemPrompt = `You are a legal expert specializing in Indian Penal Statutes. 
+            Identify the relevant sections of the Bharatiya Nyaya Sanhita (BNS) and the corresponding older Indian Penal Code (IPC) sections for the given situation.
+            Provide a brief explanation of why each section applies and the prescribed punishment.
+            Be concise and accurate.`;
 
-Please provide:
-1. Applicable BNS Sections (new law)
-2. Corresponding old IPC Sections (for reference)
-3. Procedural Sections under BNSS
-4. Any Special Law Provisions
-5. Maximum punishment for each offense
-6. Whether each offense is Bailable/Non-bailable and Cognizable/Non-cognizable`;
-
-            const data = await generateLegalContent(prompt, "You are a legal expert specializing in Indian statutes (IPC, BNS, BNSS). Provide accurate section numbers and legal classifications.");
-            setResult(data);
-        } catch (error) {
+            const result = await generateLegalContent(query, systemPrompt);
+            setResult(result);
+            toast.success("Sections identified!");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
             console.error("Section Finder Error:", error);
-            toast.error("Connection error. Please check your internet connection.");
+            toast.error(`Search Failed: ${message}`);
         } finally {
             setIsLoading(false);
         }
@@ -202,7 +198,7 @@ The thief pushed me when I tried to stop him."
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="mt-8 grid grid-cols-2 gap-4"
+                    className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
                     <a
                         href="https://indiankanoon.org"

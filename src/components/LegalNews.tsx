@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { getLegalNews } from "@/services/geminiService";
+import { getLegalNews } from "@/services/groqService";
 import { Newspaper, Calendar, ExternalLink, Loader2, Scale } from "lucide-react";
 import { Badge } from "./ui/badge";
 

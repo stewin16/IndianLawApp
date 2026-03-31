@@ -10,8 +10,8 @@ import {
     ArrowLeft, Sparkles, Loader2, CheckCircle, AlertTriangle,
     ExternalLink, Copy, FileWarning, Calendar, MapPin
 } from "lucide-react";
-import { generateFIRDraft } from "@/services/geminiService";
 import { toast } from "sonner";
+import { generateLegalContent, parseModelJson } from "@/services/groqService";
 
 const FIRGeneratorPage = () => {
     const [formData, setFormData] = useState({
@@ -22,7 +22,11 @@ const FIRGeneratorPage = () => {
         accusedDetails: ""
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [result, setResult] = useState<string | null>(null);
+    const [result, setResult] = useState<{
+        draft: string;
+        relevant_sections: string[];
+        instructions: string[];
+    } | null>(null);
 
     const handleSubmit = async () => {
         if (!formData.incidentDescription.trim()) return;
@@ -31,24 +35,40 @@ const FIRGeneratorPage = () => {
         setResult(null);
 
         try {
-            const prompt = `Complainant: ${formData.complainantName || "To be filled"}
-Incident Date: ${formData.incidentDate || "To be filled"}
-Incident Location: ${formData.incidentLocation || "To be filled"}
-Incident Description: ${formData.incidentDescription}
-Accused (if known): ${formData.accusedDetails || "Unknown"}`;
+            const systemPrompt = `You are an expert Indian Police and Legal Assistant. 
+            Generate a detailed and professionally formatted FIR (First Information Report) complaint draft. 
+            Identify the likely Sections under the Bharatiya Nyaya Sanhita (BNS) or Indian Penal Code (IPC) as applicable. 
+            Provide clear next steps for the complainant. 
+            Output must be a valid JSON object with this exact structure: 
+            { "draft": "full text of the FIR", "relevant_sections": ["string"], "instructions": ["string"] }`;
 
-            const draft = await generateFIRDraft(prompt);
-            setResult(draft);
-        } catch (error) {
+            const prompt = `Generate an FIR draft for the following incident:
+            Complainant: ${formData.complainantName}
+            Date: ${formData.incidentDate}
+            Location: ${formData.incidentLocation}
+            Accused Details: ${formData.accusedDetails}
+            Description of Incident: ${formData.incidentDescription}`;
+            
+            const content = await generateLegalContent(prompt, systemPrompt);
+            const parsed = parseModelJson<{
+                draft: string;
+                relevant_sections: string[];
+                instructions: string[];
+            }>(content, "FIR generation", "object");
+            
+            setResult(parsed);
+            toast.success("FIR Draft generated successfully!");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
             console.error("FIR Generation Error:", error);
-            toast.error("Connection error. Please check your internet connection.");
+            toast.error(`Error: ${message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
     const copyResult = () => {
-        if (result) navigator.clipboard.writeText(result);
+        if (result) navigator.clipboard.writeText(result.draft);
     };
 
     return (
@@ -211,18 +231,30 @@ Accused (if known): ${formData.accusedDetails || "Unknown"}`;
                         </div>
 
                         <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg">
-                            {result}
+                            {result.draft}
                         </div>
+
+                        {/* Relevant Sections */}
+                        {result.relevant_sections.length > 0 && (
+                            <div className="mt-6">
+                                <p className="text-sm font-bold text-gray-900 mb-2">Relevant Sections:</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {result.relevant_sections.map((sec, idx) => (
+                                        <span key={idx} className="bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-100">
+                                            {sec}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Instructions */}
                         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                             <p className="text-sm font-medium text-blue-800 mb-2">Next Steps:</p>
                             <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                                <li>Review and modify the draft as needed</li>
-                                <li>Print the FIR draft</li>
-                                <li>Visit your nearest police station with ID proof</li>
-                                <li>Submit the complaint and get acknowledgment</li>
-                                <li>Collect your FIR copy (it's free!)</li>
+                                {result.instructions.map((inst, idx) => (
+                                    <li key={idx}>{inst}</li>
+                                ))}
                             </ol>
                         </div>
 
@@ -248,7 +280,7 @@ Accused (if known): ${formData.accusedDetails || "Unknown"}`;
                     className="mt-8"
                 >
                     <h3 className="font-medium text-gray-900 mb-3">Helpful Resources</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <a
                             href="https://cybercrime.gov.in"
                             target="_blank"

@@ -11,25 +11,28 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import {
-  Calculator,
-  Calendar,
-  CreditCard,
-  Settings,
-  Smile,
-  User,
   Search,
   MessageSquare,
-  FileText,
-  Scale,
   Zap,
-  Shield,
-  MapPin,
-  Languages,
-  AlertTriangle,
+  FileText,
   BookOpen,
+  Scale,
+  Shield,
+  AlertTriangle,
+  Languages,
   Briefcase,
   Home,
   LayoutDashboard,
+  ShoppingBag,
+  FileQuestion,
+  IndianRupee,
+  HelpCircle,
+  Gavel,
+  CheckCircle,
+  Monitor,
+  Heart,
+  HeartCrack,
+  HardHat
 } from "lucide-react";
 
 export function CommandPalette() {
@@ -100,7 +103,6 @@ export function CommandPalette() {
               <span>Document Drafter</span>
             </CommandItem>
           </CommandGroup>
-          <CommandSeparator />
           <CommandGroup heading="Specialized Tools">
             <CommandItem onSelect={() => runCommand(() => navigate("/tools/case-predictor"))}>
               <Scale className="mr-2 h-4 w-4" />
@@ -121,6 +123,46 @@ export function CommandPalette() {
             <CommandItem onSelect={() => runCommand(() => navigate("/tools/lawyer-finder"))}>
               <Briefcase className="mr-2 h-4 w-4" />
               <span>Lawyer Finder</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/consumer-complaint"))}>
+              <ShoppingBag className="mr-2 h-4 w-4" />
+              <span>Consumer Complaint</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/rti-generator"))}>
+              <FileQuestion className="mr-2 h-4 w-4" />
+              <span>RTI Application</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/cost-estimator"))}>
+              <IndianRupee className="mr-2 h-4 w-4" />
+              <span>Legal Cost Estimator</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/jargon-explainer"))}>
+              <HelpCircle className="mr-2 h-4 w-4" />
+              <span>Legal Jargon Explainer</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/judgment-simplifier"))}>
+              <Gavel className="mr-2 h-4 w-4" />
+              <span>Judgment Simplifier</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/property-verifier"))}>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              <span>Property Verifier</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/cyber-complaint"))}>
+              <Monitor className="mr-2 h-4 w-4" />
+              <span>Cyber Crime Reporter</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/marriage-guide"))}>
+              <Heart className="mr-2 h-4 w-4" />
+              <span>Marriage Registration</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/divorce-guide"))}>
+              <HeartCrack className="mr-2 h-4 w-4" />
+              <span>Divorce Procedure</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => navigate("/tools/labor-advisor"))}>
+              <HardHat className="mr-2 h-4 w-4" />
+              <span>Labor Law Advisor</span>
             </CommandItem>
           </CommandGroup>
         </CommandList>

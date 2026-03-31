@@ -9,20 +9,21 @@ import requests
 import io
 from text_processor import TextProcessor
 from conversation_memory import ConversationMemory
+from groq_client import GroqClient
 
 class RAGEngine:
     def __init__(self):
-        self.api_key = os.getenv("OPENROUTER_API_KEY") 
-        # Default to free Mistral, but allow override via .env (e.g., 'openai/gpt-4o')
-        self.model_name = os.getenv("OPENROUTER_MODEL", "mistralai/mistral-7b-instruct-v0.1") # Backward-compat default
-        # Separate model routing (legal vs general)
-        self.model_legal = os.getenv("OPENROUTER_MODEL_LEGAL", os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-orchestrator-8b"))
-        self.model_simple = os.getenv("OPENROUTER_MODEL_SIMPLE", "mistralai/mistral-7b-instruct-v0.1")
-
+        self.api_key = os.getenv("GROQ_API_KEY") 
+        self.model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        self.model_legal = self.model_name
+        self.model_simple = self.model_name
+        
         if self.api_key:
-            print(f"[RAGEngine] OpenRouter Key Found. Using Model(s): legal={self.model_legal}, simple={self.model_simple}")
+            self.groq = GroqClient(self.api_key, self.model_name)
+            print(f"[RAGEngine] Groq Key Found. Using Model: {self.model_name}")
         else:
-            print("[RAGEngine] ⚠️ Warning: OPENROUTER_API_KEY not found. LLM features disabled.")
+            self.groq = None
+            print("[RAGEngine] ⚠️ Warning: GROQ_API_KEY not found. LLM features disabled.")
 
         # Initialize Enhanced Text Processor
         self.text_processor = TextProcessor()
@@ -72,46 +73,19 @@ class RAGEngine:
         return 'legal'
     
     def _call_llm(self, messages: List[Dict], max_tokens: int = 1500, timeout: int = 30, model_override: Optional[str] = None) -> str:
-        """Helper to call OpenRouter API with timeout."""
-        if not self.api_key:
-            raise Exception("API Key missing")
-
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "http://localhost:3000",
-            "X-Title": "LegalAi",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": model_override or self.model_name,
-            "messages": messages,
-            "temperature": 0.3,
-            "max_tokens": max_tokens
-        }
+        """Helper to call Groq API with timeout."""
+        if not self.groq:
+            raise Exception("Groq Client not initialized (API Key missing)")
 
         try:
-            # Optimized timeout: 30s (was 120s)
-            response = requests.post(url, headers=headers, json=data, timeout=timeout)
-            
-            if response.status_code != 200:
-                print(f"[RAGEngine] API Error Body: {response.text}")
-                raise Exception(f"API Error {response.status_code}: {response.text}")
-
-            result = response.json()
-            if 'choices' in result and len(result['choices']) > 0:
-                content = result['choices'][0]['message'].get('content', '')
-                if not content:
-                     return "Error: Received empty content from LLM."
-                return content
-            else:
-                raise Exception(f"Unexpected response format: {result}")
-
-        except requests.exceptions.Timeout:
-            print(f"[RAGEngine] Request timeout after {timeout}s")
-            raise Exception(f"Response took too long (>{timeout}s). The LLM service may be busy. Please try again.")
+            return self.groq.chat_completion(
+                messages,
+                max_tokens=max_tokens,
+                model=model_override,
+                timeout=timeout,
+            )
         except Exception as e:
-            print(f"[RAGEngine] Request failed: {e}")
+            print(f"[RAGEngine] Groq request failed: {e}")
             raise e
 
     def _clean_text(self, text: str) -> str:
@@ -280,6 +254,9 @@ class RAGEngine:
         # Handle conversation memory and query reformulation
         original_query = query
         if session_id:
+            self.conversation_memory.add_message(session_id, "user", original_query)
+
+        if session_id:
             query = self.conversation_memory.reformulate_query(session_id, query)
             if query != original_query:
                 print(f"[RAGEngine] Query reformulated: '{original_query}' -> '{query}'")
@@ -368,17 +345,28 @@ class RAGEngine:
                     n_results=5,
                     include=["documents", "metadatas", "distances"]
                 )
-                print(f"[RAGEngine] Vector Search Complete. Found: {len(results['documents'][0])} docs", flush=True)
+                docs = (results.get('documents') or [[]])[0] if results else []
+                metas = (results.get('metadatas') or [[]])[0] if results else []
+                dists = (results.get('distances') or [[]])[0] if results else []
+
+                print(f"[RAGEngine] Vector Search Complete. Found: {len(docs)} docs", flush=True)
                 
-                docs = results['documents'][0]
-                metas = results['metadatas'][0]
-                
-                dists = results['distances'][0]
                 min_dist = min(dists) if dists else 1.0
                 
-                for i, doc in enumerate(docs):
-                    meta = metas[i]
-                    dist = dists[i]
+                # Group results and sort to prioritize new Sanhitas
+                retrieved_items = list(zip(docs, metas, dists))
+                
+                def sort_key(item):
+                    doc, meta, dist = item
+                    law = (meta.get('law') or '').upper()
+                    # Priority 0 for new Sanhitas, Priority 1 for others
+                    if 'BNS' in law or 'BNSS' in law or 'BSA' in law:
+                        return (0, dist)
+                    return (1, dist)
+                
+                retrieved_items.sort(key=sort_key)
+                
+                for doc, meta, dist in retrieved_items:
                     
                     # Relevance Cutoff tightened: dynamic + absolute guard
                     if dist > (min_dist + 0.15) or dist > 0.4:
@@ -426,19 +414,24 @@ class RAGEngine:
         print(f"[RAGEngine] Preparing LLM request...", flush=True)
         if self.api_key:
             system_prompt = (
-                "You are LegalAi, an Indian legal research assistant.\n\n"
-                "CRITICAL RULES:\n"
-                "1. Answer ONLY using the provided legal context.\n"
-                "2. If sufficient legal context is not available, say: \"Insufficient verified legal context available.\"\n"
-                "3. Do NOT invent section numbers, punishments, or provisions.\n"
-                "4. Do NOT compare with other Acts unless explicitly asked.\n"
-                "5. Always ensure punishments and section references are accurate.\n\n"
+                "You are LegalAi, a Senior Advocate of the Supreme Court of India and a Constitutional Scholar.\n\n"
+                "Your expertise covers the Constitution of India, Bharatiya Nyaya Sanhita (BNS), BNSS, BSA, and all major Central/State Acts.\n\n"
+                "CRITICAL KNOWLEDGE (MUST FOLLOW):\n"
+                "1. The Bharatiya Nyaya Sanhita (BNS), Bharatiya Nagarik Suraksha Sanhita (BNSS), and Bharatiya Sakshya Adhiniyam (BSA) ARE THE CURRENT LAWS OF INDIA. They came into effect on July 1, 2024, replacing the IPC, CrPC, and IEA respectively.\n"
+                "2. DO NOT refer to them as 'proposed', 'upcoming', or 'bills'. They are the ACTIVE STATUTES.\n"
+                "3. Use BNS-first logic. For every criminal query, identify the relevant BNS section immediately. Mention IPC ONLY as a secondary historical reference if necessary.\n"
+                "4. Answer REAL-LIFE SCENARIOS by applying the current law to the facts provided. Maintain a objective, analytical tone.\n"
+                "5. CITE YOUR SOURCES. Always include inline citations to the Acts and Sections you reference (e.g., [Section 303(2), BNS]).\n"
+                "6. Always check if the Constitutional Fundamental Rights (Part III) apply to the scenario.\n"
+                "7. If sufficient legal context is not available, say: \"Insufficient verified legal context available.\"\n"
+                "8. Do NOT invent section numbers, punishments, or provisions. Always ensure section references are legally accurate for Indian jurisdiction.\n\n"
                 "STRUCTURE YOUR ANSWER:\n"
                 "1. Direct Answer (1–2 sentences)\n"
-                "2. Relevant Provisions (correct section mapping)\n"
-                "3. Essential Ingredients (if applicable)\n"
-                "4. Punishment\n"
-                "5. Verifiable Source\n\n"
+                "2. Constitutional Perspective (if applicable)\n"
+                "3. Relevant Provisions (BNS/BNSS/BSA with citations)\n"
+                "4. Real-life Application/Scenario Analysis\n"
+                "5. Punishment & Consequences\n"
+                "6. Verifiable Source & Citations\n\n"
                 "FORMATTING:\n- Use Markdown with clear headings & bullets.\n- Bold section numbers and Act names.\n"
                 "DISCLAIMER: For informational purposes only. Not legal advice."
             )
@@ -493,17 +486,20 @@ class RAGEngine:
 
             try:
                 print(f"[RAGEngine] Calling LLM now...", flush=True)
-                # Check cache (keyed by query + language + top sources)
-                cache_key = f"{language}|{query.strip()}|{','.join([c.get('source','') for c in citations[:2]])}"
+                # Check cache (keyed by query + language + modes + top sources)
+                cache_key = f"{language}|{analysis_mode}|{arguments_mode}|{query.strip()}|{','.join([c.get('source','') for c in citations[:2]])}"
                 if cache_key in self._cache:
                     cached = self._cache[cache_key]
-                    return {
+                    response = {
                         "answer": cached.get("answer", ""),
                         "citations": citations[:3],
                         "related_judgments": related_judgments[:3],
                         "neutral_analysis": cached.get("neutral_analysis"),
                         "arguments": cached.get("arguments")
                     }
+                    if session_id:
+                        self.conversation_memory.add_message(session_id, "assistant", response.get("answer", ""))
+                    return response
 
                 max_tokens = 2000 if is_long else 1500
                 raw_answer = self._call_llm([
@@ -570,7 +566,7 @@ class RAGEngine:
                 print(f"[RAGEngine] LLM Error: {e}")
                 answer = f"Error: {str(e)}"
 
-        return {
+        response = {
             "answer": answer,
             "citations": citations[:3],
             "related_judgments": related_judgments[:3], 
@@ -578,6 +574,11 @@ class RAGEngine:
             "neutral_analysis": neutral_analysis,
             "disclaimer": "AI-generated response. For informational purposes only. Consult a qualified lawyer."
         }
+
+        if session_id:
+            self.conversation_memory.add_message(session_id, "assistant", response.get("answer", ""))
+
+        return response
 
     def generate_draft(self, draft_type: str, details: str, language: str = 'en') -> str:
         """
@@ -629,7 +630,7 @@ class RAGEngine:
         ]
 
         try:
-            # Using model_simple (Mistral) for better reliability during demo
+            # Using model_simple for lightweight draft generation.
             return self._call_llm(messages, max_tokens=2000, model_override=self.model_simple)
         except Exception as e:
             print(f"[RAGEngine] Drafting failed: {e}")

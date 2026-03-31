@@ -10,11 +10,10 @@ const ScrollToTop = () => {
 
     // Auto-scroll to top on route change
     useEffect(() => {
-        console.log("Scrolling to top due to route change");
         window.scrollTo({
             top: 0,
             left: 0,
-            behavior: "instant", // Instant jump for better UX on page load
+            behavior: "auto",
         });
     }, [pathname]);
 

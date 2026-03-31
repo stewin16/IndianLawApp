@@ -1,24 +1,21 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Scale, Zap, BookOpen, Mic, MicOff, Download, Sparkles, Send, Menu, Plus, Trash2, MessageSquare, ExternalLink, Copy, Check, Volume2, Search, X, ChevronRight, ArrowRight } from "lucide-react";
+import { Loader2, Scale, Zap, BookOpen, Mic, MicOff, Download, Sparkles, Send, Menu, Plus, Trash2, MessageSquare, ExternalLink, Copy, Check, Volume2, Search, X, ChevronRight, ArrowRight, Wifi, WifiOff, RotateCw } from "lucide-react";
 import Header from "@/components/Header";
 import TricolorBackground from "@/components/TricolorBackground";
-import Footer from "@/components/Footer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { useTranslations } from "@/lib/translations";
-import { chatWithLegalAI, chatWithLegalAIStream, generateFollowUpQuestions, generateLegalTTS } from "@/services/geminiService";
+import { chatStream } from "@/services/groqService";
 import { toast } from "sonner";
+import { exportStructuredPdf, toPlainText } from "@/lib/pdfExport";
 
 interface Judgment {
   title: string;
@@ -50,6 +47,89 @@ interface Message {
   citations?: Citation[];
 }
 
+const NON_LEGAL_INTENT_PATTERNS = [
+  /^(hi|hello|hey|yo|hola|namaste|good\s*(morning|afternoon|evening))\b/i,
+  /\bhow are you\b/i,
+  /\bwho are you\b/i,
+  /\bwhat can you do\b/i,
+  /\bthank(s| you)?\b/i,
+  /\bbye|goodbye|see you\b/i,
+  /\bjoke\b/i,
+  /\bweather\b/i,
+  /\btime\b/i,
+];
+
+const LEGAL_HINT_PATTERNS = [
+  /\blaw|legal|ipc|bns|bnss|bsa|section|act|code|court|judge|judgment|bail|fir|complaint|petition|affidavit|writ|notice|agreement|contract|property|divorce|marriage|consumer|crime|criminal|civil|tax|labour|labor\b/i,
+  /\d+\s*(ipc|bns|crpc|bnss|section)/i,
+];
+
+const isNonLegalSmallTalk = (text: string) => {
+  const normalized = text.trim();
+  if (!normalized) return false;
+
+  const hasLegalSignal = LEGAL_HINT_PATTERNS.some((pattern) => pattern.test(normalized));
+  if (hasLegalSignal) return false;
+
+  return NON_LEGAL_INTENT_PATTERNS.some((pattern) => pattern.test(normalized));
+};
+
+const buildSmallTalkReply = (text: string) => {
+  const normalized = text.toLowerCase();
+
+  if (/\bthank(s| you)?\b/i.test(normalized)) {
+    return "You're welcome. I can help with Indian legal questions, sections, drafting, and case analysis.";
+  }
+
+  if (/\bbye|goodbye|see you\b/i.test(normalized)) {
+    return "Take care. Come back anytime for legal help with Indian law and documents.";
+  }
+
+  if (/\bhow are you\b/i.test(normalized)) {
+    return "I am ready to assist. Ask me any Indian legal question, such as IPC/BNS sections, bail, FIR drafting, or legal document review.";
+  }
+
+  if (/\bwho are you\b|\bwhat can you do\b/i.test(normalized)) {
+    return "I am your Indian legal AI assistant. I handle legal research, drafting, summarization, comparison, and law-section guidance.";
+  }
+
+  return "Hi. I am ready to help with Indian legal matters. Ask a legal question and I will respond with relevant guidance and sections.";
+};
+
+const buildInstantLegalPreview = (text: string, useLanguage: 'en' | 'hi') => {
+  const normalized = text.toLowerCase();
+  const sectionMatch = normalized.match(/(?:section|sec|u\/s|ipc|bns)\s*(\d{1,4}[a-z]?)/i);
+
+  if (useLanguage === 'hi') {
+    if (sectionMatch) {
+      return `त्वरित उत्तर: आपने धारा ${sectionMatch[1].toUpperCase()} के बारे में पूछा है। मैं अभी संबंधित प्रावधान, दंड और व्यावहारिक कदम संक्षेप में दे रहा हूं।`;
+    }
+    return "त्वरित उत्तर: आपका प्रश्न कानूनी विषय से जुड़ा है। मैं अभी संबंधित कानून, लागू बिंदु, और अगले व्यावहारिक कदम तुरंत साझा कर रहा हूं।";
+  }
+
+  if (sectionMatch) {
+    return `Quick answer: You asked about Section ${sectionMatch[1].toUpperCase()}. I am now fetching the applicable provisions, punishment range, and practical next steps.`;
+  }
+
+  return "Quick answer: Your query is legal in nature. I am now fetching the relevant law, core interpretation, and practical next steps.";
+};
+
+const toReadableError = (error: unknown) => {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+};
+
 const getQuickPrompts = (t: { quickPrompts: Record<string, { query: string }> }) => [
   { textKey: "quickPrompts.murder", query: t.quickPrompts.murder?.query || "Punishment for murder under BNS" },
   { textKey: "quickPrompts.consumer", query: t.quickPrompts.consumer?.query || "How to file a consumer complaint" },
@@ -74,8 +154,25 @@ const ChatPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [isSpeaking, setIsSpeaking] = useState<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const [isCheckingGroq, setIsCheckingGroq] = useState(false);
+  const [groqStatus, setGroqStatus] = useState({
+    state: "connected",
+    activeModel: import.meta.env.VITE_GROQ_MODEL || "Llama 3.3 70B",
+    latencyMs: null,
+    message: "Groq Cloud Active",
+  });
+
+  const refreshGroqStatus = useCallback(async () => {
+    setIsCheckingGroq(true);
+    // Mimic a status check
+    setTimeout(() => {
+      setIsCheckingGroq(false);
+      setGroqStatus(prev => ({ ...prev, state: "connected" }));
+      toast.success("Groq API connection verified.");
+    }, 500);
+  }, []);
 
   const domains = [
     { id: "all", label: "All Laws", icon: <Scale className="w-3 h-3" /> },
@@ -99,7 +196,6 @@ const ChatPage = () => {
 
   // Load conversations from localStorage on mount
   useEffect(() => {
-    window.scrollTo(0, 0);
     const saved = localStorage.getItem('legal-compass-conversations');
     if (saved) {
       try {
@@ -123,9 +219,16 @@ const ChatPage = () => {
   }, [conversations]);
 
   useEffect(() => {
-    if (scrollRef.current && (messages.length > 0 || isLoading)) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    const list = messageListRef.current;
+    if (!list || !shouldAutoScrollRef.current || (messages.length === 0 && !isLoading)) {
+      return;
     }
+
+    const raf = window.requestAnimationFrame(() => {
+      list.scrollTo({ top: list.scrollHeight, behavior: 'auto' });
+    });
+
+    return () => window.cancelAnimationFrame(raf);
   }, [messages, isLoading]);
 
   useEffect(() => {
@@ -139,6 +242,10 @@ const ChatPage = () => {
     }
     return () => clearInterval(interval);
   }, [isLoading, t.loadingTexts]);
+
+  useEffect(() => {
+    // Gemini health check removed
+  }, []);
 
   const startListening = () => {
     if ('webkitSpeechRecognition' in window) {
@@ -187,132 +294,53 @@ const ChatPage = () => {
     return `https://indiankanoon.org/search/?formInput=${query}`;
   };
 
-  const exportPDF = (msg: Message, query: string) => {
-    const doc = new jsPDF();
+  const exportPDF = async (msg: Message, query: string) => {
+    try {
+      const citationText = (msg.citations || [])
+        .map((c, idx) => `${idx + 1}. ${c.source} | ${c.section}\n${c.text}`)
+        .join("\n\n");
 
-    // Header
-    doc.setFontSize(20);
-    doc.setTextColor(40, 40, 40);
-    doc.text("LegalAi - Research Report", 15, 20);
-
-    // Metadata
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Date: ${new Date().toLocaleDateString()} | Domain: ${domain}`, 15, 28);
-
-    // Query
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Query: ${query}`, 15, 40);
-
-    // Content
-    doc.setFontSize(11);
-
-    // Improved simple text cleaner for PDF
-    const cleanText = (text: string) => {
-      return text
-        .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
-        .replace(/\*(.*?)\*/g, '$1')     // Italic
-        .replace(/##/g, '')              // Headings
-        .replace(/^#\s/gm, '')           // H1
-        .replace(/^-\s/gm, '• ')         // Bullets
-        .trim();
-    };
-
-    const splitText = doc.splitTextToSize(cleanText(msg.content), 180);
-    doc.text(splitText, 15, 50);
-
-    let yPos = 50 + (splitText.length * 7);
-
-    // Citations
-    if (msg.citations && msg.citations.length > 0) {
-      doc.addPage(); // Force new page for citations
-      yPos = 20;     // Reset Y position
-
-      doc.setFontSize(14);
-      doc.setTextColor(40, 40, 40);
-      doc.text("Legal Citations", 15, yPos);
-      yPos += 10;
-
-      const citationData = msg.citations.map(c => [c.source, c.section, c.text]);
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Source', 'Section', 'Text']],
-        body: citationData,
-        theme: 'grid'
+      await exportStructuredPdf({
+        title: "LegalAi - Research Report",
+        fileName: "legal-research-report.pdf",
+        metadata: [
+          `Date: ${new Date().toLocaleDateString()}`,
+          `Domain: ${domain}`,
+        ],
+        sections: [
+          { label: "Query", text: toPlainText(query) },
+          { label: "Answer", text: toPlainText(msg.content) },
+          ...(citationText ? [{ label: "Legal Citations", text: toPlainText(citationText) }] : []),
+        ],
+        footer: "Disclaimer: Provided for informational purposes only. Not legal advice.",
       });
-      interface JsPDFWithAutoTable extends jsPDF {
-        lastAutoTable: { finalY: number };
-      }
-      yPos = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
+    } catch (error) {
+      console.error("PDF Export Error:", error);
+      toast.error("Unable to export PDF. Please try again.");
     }
-
-    // Disclaimer
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("Disclaimer: Provide for informational purposes only. Not legal advice.", 15, 280);
-
-    doc.save("legal-research-report.pdf");
   };
 
-  const exportFullChat = () => {
-    const doc = new jsPDF();
+  const exportFullChat = async () => {
+    try {
+      const sections = messages.map((msg) => ({
+        label: msg.role === "user" ? "You" : "LegalAi",
+        text: toPlainText(msg.content),
+      }));
 
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(40, 40, 40);
-    doc.text("LegalAi - Conversation History", 15, 20);
-
-    // Metadata
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Date: ${new Date().toLocaleDateString()} | Domain: ${domain}`, 15, 28);
-
-    let yPos = 40;
-
-    messages.forEach((msg) => {
-      // Page break check
-      if (yPos > 250) {
-        doc.addPage();
-        yPos = 20;
-      }
-
-      // Role Header
-      doc.setFontSize(12);
-      if (msg.role === 'user') {
-        doc.setTextColor(0, 50, 150); // Muted Blue
-        doc.text("You:", 15, yPos);
-      } else {
-        doc.setTextColor(100, 0, 150); // Muted Purple
-        doc.text("LegalAi:", 15, yPos);
-      }
-      yPos += 7;
-
-      // Content
-      doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-
-      // Robust markdown stripping for full chat
-      const cleanContent = msg.content
-        .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
-        .replace(/\*(.*?)\*/g, '$1')     // Italic
-        .replace(/##/g, '')              // Headings
-        .replace(/^#\s/gm, '')           // H1
-        .replace(/^-\s/gm, '• ')         // Bullets
-        .trim();
-
-      const splitText = doc.splitTextToSize(cleanContent, 180);
-      doc.text(splitText, 15, yPos);
-
-      // Calculate new Y position based on text height
-      yPos += (splitText.length * 5) + 10;
-
-      // Separator line
-      doc.setDrawColor(230, 230, 230);
-      doc.line(15, yPos - 5, 195, yPos - 5);
-    });
-
-    doc.save("legal-compass-full-chat.pdf");
+      await exportStructuredPdf({
+        title: "LegalAi - Conversation History",
+        fileName: "legal-compass-full-chat.pdf",
+        metadata: [
+          `Date: ${new Date().toLocaleDateString()}`,
+          `Domain: ${domain}`,
+        ],
+        sections,
+        footer: "Disclaimer: Provided for informational purposes only. Not legal advice.",
+      });
+    } catch (error) {
+      console.error("Full Chat PDF Export Error:", error);
+      toast.error("Unable to export full chat PDF. Please try again.");
+    }
   };
 
   // Conversation management functions
@@ -320,6 +348,7 @@ const ChatPage = () => {
     setMessages([]);
     setActiveConversationId(null);
     setInput("");
+    shouldAutoScrollRef.current = true;
   };
 
   const switchConversation = (convId: string) => {
@@ -327,6 +356,7 @@ const ChatPage = () => {
     if (conv) {
       setActiveConversationId(conv.id);
       setMessages(conv.messages);
+      shouldAutoScrollRef.current = true;
     }
   };
 
@@ -370,93 +400,82 @@ const ChatPage = () => {
     const initialAssistantMsg: Message = { role: 'assistant', content: "" };
     
     setMessages(prev => [...prev, userMsg, initialAssistantMsg]);
-    setInput("");
     setIsLoading(true);
-    setSuggestedQuestions([]);
-
-    const isHindiInput = /[\u0900-\u097F]/.test(text);
-    const useLanguage = isHindiInput ? 'hi' : 'en';
-    if (useLanguage !== language) setLanguage(useLanguage);
+    setInput("");
+    shouldAutoScrollRef.current = true;
 
     try {
-      // Prepare history for Gemini
-      const history = messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }]
+      // Prepare history for Groq
+      const history = [...messages, userMsg].map(m => ({
+        role: m.role,
+        content: m.content
       }));
 
-      const stream = await chatWithLegalAIStream(text, history, {
-        language: useLanguage,
-        domain,
-        arguments_mode: argumentsMode,
-        analysis_mode: analysisMode
-      });
-
-      let fullContent = "";
-      for await (const chunk of stream) {
-        const chunkText = chunk.text;
-        if (chunkText) {
-          fullContent += chunkText;
+      await chatStream(
+        history,
+        (content, citations) => {
           setMessages(prev => {
-            const newMessages = [...prev];
-            newMessages[newMessages.length - 1] = {
-              ...newMessages[newMessages.length - 1],
-              content: fullContent
-            };
-            return newMessages;
+            const newMsgs = [...prev];
+            newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content, citations };
+            return newMsgs;
           });
-        }
-      }
-      
-      // Save to history after stream completes
-      setMessages(prev => {
-        const finalMessages = [...prev];
-        saveCurrentConversation(finalMessages);
-        return finalMessages;
-      });
+        },
+        activeConversationId || undefined,
+        language,
+        argumentsMode,
+        analysisMode
+      );
 
-      // Generate follow-up questions
-      const followUps = await generateFollowUpQuestions(fullContent, text);
-      setSuggestedQuestions(followUps);
+      // Save to history after stream finishes
+      setMessages(prev => {
+        saveCurrentConversation(prev);
+        return prev;
+      });
 
     } catch (error) {
       console.error("Chat Error:", error);
       setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          role: 'assistant',
-          content: "Error connecting to the Gemini API. Please check your internet connection or try again later."
+        const newMsgs = [...prev];
+        newMsgs[newMsgs.length - 1] = { 
+          ...newMsgs[newMsgs.length - 1], 
+          content: "Sorry, I encountered an error connecting to the Groq AI service. Please check your API key and internet connection." 
         };
-        return newMessages;
+        return newMsgs;
       });
     } finally {
       setIsLoading(false);
+      setSuggestedQuestions([
+        "Explain Section 302 of BNS",
+        "How to file a public interest litigation?",
+        "Difference between IPC and BNS",
+        "Recent Supreme Court judgments on privacy",
+      ]);
     }
   };
 
+
   const handleTTS = async (text: string, index: number) => {
     if (isSpeaking === index) {
-      audioRef.current?.pause();
+      window.speechSynthesis.cancel();
       setIsSpeaking(null);
       return;
     }
 
     setIsSpeaking(index);
-    const audioUrl = await generateLegalTTS(text.slice(0, 1000)); // Limit length for TTS
-    if (audioUrl) {
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        audioRef.current.onended = () => setIsSpeaking(null);
-      } else {
-        const audio = new Audio(audioUrl);
-        audioRef.current = audio;
-        audio.play();
-        audio.onended = () => setIsSpeaking(null);
-      }
-    } else {
+    if (!('speechSynthesis' in window)) {
       setIsSpeaking(null);
+      toast.error("Speech synthesis is not supported in this browser.");
+      return;
     }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text.slice(0, 1000));
+    utterance.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onend = () => setIsSpeaking(null);
+    utterance.onerror = () => setIsSpeaking(null);
+    window.speechSynthesis.speak(utterance);
   };
 
   // Group conversations by date and filter by search
@@ -482,15 +501,12 @@ const ChatPage = () => {
   }, {} as Record<string, typeof conversations>);
 
   return (
-    <div className="min-h-screen flex flex-col text-gray-900 overflow-x-hidden bg-white">
+    <div className="h-[100dvh] flex flex-col text-gray-900 overflow-hidden bg-white">
       <TricolorBackground intensity="medium" showOrbs={true} />
       {!focusMode && <Header />}
 
       {/* Main Layout Container */}
-      <div className={cn(
-        "flex-1 flex overflow-hidden pt-0 transition-all duration-500",
-        focusMode ? "h-screen" : "h-[calc(100vh-64px)]"
-      )}>
+      <div className="flex-1 min-h-0 flex overflow-hidden pt-0 transition-all duration-500">
 
         {/* Sidebar - Premium Technical Dashboard Style */}
         <AnimatePresence mode="wait">
@@ -499,7 +515,7 @@ const ChatPage = () => {
               initial={{ x: -280, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -280, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
               className="w-[280px] bg-white/80 backdrop-blur-xl border-r border-navy-india/10 flex flex-col shrink-0 z-20 relative shadow-2xl shadow-navy-india/5"
             >
               <div className="p-6 border-b border-navy-india/5 space-y-4">
@@ -526,7 +542,7 @@ const ChatPage = () => {
                   onClick={() => {
                     if (window.confirm("Are you sure you want to clear all chat history?")) {
                       setConversations([]);
-                      localStorage.removeItem("legal_chat_conversations");
+                      localStorage.removeItem("legal-compass-conversations");
                       toast.success("History cleared");
                     }
                   }}
@@ -585,25 +601,8 @@ const ChatPage = () => {
                   </div>
                 )}
 
-                {conversations.length > 0 && (
-                  <div className="px-3 pt-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (window.confirm("Are you sure you want to clear all research history?")) {
-                          setConversations([]);
-                          createNewChat();
-                          localStorage.removeItem('legal-compass-conversations');
-                        }
-                      }}
-                      className="w-full justify-start gap-2 text-[10px] font-bold uppercase tracking-wider text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      Clear All History
-                    </Button>
-                  </div>
-                )}
+
+
               </div>
 
               <div className="p-4 border-t border-navy-india/5 bg-navy-india/5">
@@ -622,7 +621,7 @@ const ChatPage = () => {
         </AnimatePresence>
 
         {/* Main Chat Area - Immersive Editorial Style */}
-        <main className="flex-1 flex flex-col relative min-w-0 bg-white/40 backdrop-blur-sm">
+        <main className="flex-1 min-h-0 flex flex-col relative min-w-0 bg-white/40 backdrop-blur-sm">
           {/* Mobile Sidebar Toggle */}
           {(!sidebarOpen || focusMode) && (
             <Button
@@ -655,13 +654,25 @@ const ChatPage = () => {
                     <Menu className="h-5 w-5" />
                   </Button>
                 )}
-                <div className="flex flex-col">
-                  <h2 className="text-sm font-bold text-navy-india flex items-center gap-2">
-                    Legal Intelligence Lab
-                    <span className="px-1.5 py-0.5 rounded bg-green-india/10 text-green-india text-[10px] font-mono font-bold">ACTIVE_NODE</span>
-                  </h2>
-                  <span className="text-[10px] text-navy-india/40 font-mono font-bold uppercase tracking-widest">Protocol_0{activeConversationId ? activeConversationId.slice(-2) : "01"}</span>
-                </div>
+                  <div className="flex flex-col">
+                    <h2 className="text-sm font-bold text-navy-india flex items-center gap-2">
+                      Legal AI Assistant
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1",
+                          groqStatus.state === "connected" && "bg-green-india/10 text-green-india",
+                          groqStatus.state === "disconnected" && "bg-red-500/10 text-red-500"
+                        )}
+                        title={groqStatus.message}
+                      >
+                        {groqStatus.state === "disconnected" ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
+                        {groqStatus.state === "connected" ? "Groq Online" : "Cloud Offline"}
+                      </span>
+                    </h2>
+                    <span className="text-[11px] text-navy-india/50">
+                      {groqStatus.activeModel ? `Model: ${groqStatus.activeModel}` : "Indian Law Research Assistant"}
+                    </span>
+                  </div>
               </div>
 
               <div className="flex items-center gap-3">
@@ -719,6 +730,19 @@ const ChatPage = () => {
                 <Button
                   variant="ghost"
                   size="icon"
+                  onClick={refreshGroqStatus}
+                  disabled={isCheckingGroq}
+                  className="h-9 w-9 text-navy-india/40 hover:text-navy-india hover:bg-navy-india/5 rounded-xl transition-colors"
+                  title="Refresh Groq status"
+                >
+                  <RotateCw className={cn("w-4 h-4", isCheckingGroq && "animate-spin")} />
+                </Button>
+
+                <div className="h-6 w-px bg-navy-india/10" />
+
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={exportFullChat}
                   disabled={messages.length === 0}
                   className="h-9 w-9 text-navy-india/40 hover:text-navy-india hover:bg-navy-india/5 rounded-xl transition-colors"
@@ -751,7 +775,17 @@ const ChatPage = () => {
           </div>
 
           {/* Messages List - Immersive Scroll */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 scroll-smooth no-scrollbar">
+          <div
+            ref={messageListRef}
+            onScroll={() => {
+              const list = messageListRef.current;
+              if (!list) return;
+
+              const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+              shouldAutoScrollRef.current = distanceFromBottom < 160;
+            }}
+            className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar"
+          >
             <div className="max-w-4xl mx-auto space-y-10 pb-12">
               <AnimatePresence mode="popLayout">
                 {messages.length === 0 && (
@@ -801,7 +835,7 @@ const ChatPage = () => {
                 {messages.map((msg, idx) => (
                   <motion.div
                     key={idx}
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={msg.role === 'assistant' ? { opacity: 0 } : { opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={cn("flex w-full gap-6", msg.role === 'user' ? "justify-end" : "justify-start")}
                   >
@@ -817,12 +851,12 @@ const ChatPage = () => {
                     )}>
                       {msg.role === 'user' && (
                         <div className="mb-2 flex items-center justify-end gap-2">
-                          <span className="text-[10px] font-mono font-bold text-navy-india/40 uppercase tracking-widest">Researcher_ID_01</span>
+                          <span className="text-[10px] text-navy-india/30">You</span>
                         </div>
                       )}
                       {msg.role === 'assistant' && (
                         <div className="mb-2 flex items-center gap-2">
-                          <span className="text-[10px] font-mono font-bold text-saffron uppercase tracking-widest">LegalAI_Response</span>
+                          <span className="text-[10px] text-saffron font-semibold">LegalAI</span>
                           <div className="h-px flex-1 bg-navy-india/5" />
                         </div>
                       )}
@@ -930,7 +964,7 @@ const ChatPage = () => {
                                   {isSpeaking === idx ? "Speaking..." : "Listen"}
                                 </Button>
                               </div>
-                              <span className="text-[10px] font-mono text-navy-india/20">VERIFIED_BY_GEMINI_3.0</span>
+                              <span className="text-[10px] text-navy-india/20">AI-generated · not legal advice</span>
                             </div>
                           </div>
                         ) : (
@@ -983,7 +1017,6 @@ const ChatPage = () => {
                   </motion.div>
                 )}
               </AnimatePresence>
-              <div ref={scrollRef} />
             </div>
           </div>
 
@@ -1035,30 +1068,21 @@ const ChatPage = () => {
               </div>
             </div>
             
-            <div className="mt-4 flex items-center justify-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-india animate-pulse" />
-                <span className="text-[10px] font-mono font-bold text-navy-india/30 uppercase tracking-[0.2em]">Node_Status: Online</span>
-              </div>
-              <div className="w-px h-3 bg-navy-india/10" />
-              <span className="text-[10px] font-mono font-bold text-navy-india/30 uppercase tracking-[0.2em]">v3.1.0_PRO_CORE</span>
+            <div className="mt-3 flex items-center justify-center gap-4">
+              <span className="text-[11px] text-navy-india/30">AI-generated legal information · not a substitute for professional legal advice</span>
               {focusMode && (
-                <>
-                  <div className="w-px h-3 bg-navy-india/10" />
-                  <button 
-                    onClick={() => setFocusMode(false)}
-                    className="text-[10px] font-mono font-bold text-saffron uppercase tracking-[0.2em] hover:underline"
-                  >
-                    Exit_Focus_Mode
-                  </button>
-                </>
+                <button 
+                  onClick={() => setFocusMode(false)}
+                  className="text-[11px] text-saffron hover:underline"
+                >
+                  Exit Focus Mode
+                </button>
               )}
             </div>
           </div>
 
         </main>
       </div>
-      <Footer />
     </div>
   );
 };

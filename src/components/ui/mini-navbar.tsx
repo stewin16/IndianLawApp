@@ -6,6 +6,7 @@ import { Menu, X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
+import { useAuth } from '@/auth/AuthContext';
 
 const NavLink = ({ href, children, isActive }: { href: string; children: React.ReactNode; isActive?: boolean }) => {
   return (
@@ -29,6 +30,7 @@ const NavLink = ({ href, children, isActive }: { href: string; children: React.R
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { isAuthenticated, logout, user } = useAuth();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -49,8 +51,8 @@ export function Navbar() {
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg overflow-hidden border border-navy-india/10 group-hover:border-saffron/50 transition-all duration-500 group-hover:rotate-6 shadow-sm">
-            <img src="/logo.jpg" alt="LegalAi" className="w-full h-full object-cover" />
+          <div className="w-9 h-9 rounded-lg overflow-hidden border border-navy-india/10 group-hover:border-saffron/50 transition-all duration-500 group-hover:rotate-6 shadow-sm bg-white p-0.5">
+            <img src="/logo.png" alt="LegalAi" className="w-full h-full object-contain" />
           </div>
           <div className="flex flex-col">
             <span className="font-serif font-bold text-navy-india text-xl tracking-tighter group-hover:text-saffron transition-colors leading-none">
@@ -79,11 +81,31 @@ export function Navbar() {
 
         {/* Action Button */}
         <div className="hidden lg:flex items-center gap-3">
-          <Link to="/chat">
-            <Button className="rounded-full btn-navy px-5 h-9 text-xs uppercase tracking-widest font-bold">
-              Launch AI
-            </Button>
-          </Link>
+          {!isAuthenticated ? (
+            <Link to="/login">
+              <Button className="rounded-full btn-navy px-5 h-9 text-xs uppercase tracking-widest font-bold">
+                Login
+              </Button>
+            </Link>
+          ) : (
+            <>
+              <Link to="/chat">
+                <Button className="rounded-full btn-navy px-5 h-9 text-xs uppercase tracking-widest font-bold">
+                  Launch AI
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void logout();
+                }}
+                className="rounded-full px-4 h-9 text-[10px] uppercase tracking-widest font-bold"
+                title={user?.email || 'Logout'}
+              >
+                Logout
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -121,6 +143,26 @@ export function Navbar() {
                 {location.pathname === link.href && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
               </Link>
             ))}
+
+            {!isAuthenticated ? (
+              <Link
+                to="/login"
+                className="px-4 py-3 mt-2 text-sm font-bold rounded-xl text-navy-india/80 hover:bg-navy-india/5 uppercase tracking-wider"
+                onClick={() => setIsOpen(false)}
+              >
+                Login
+              </Link>
+            ) : (
+              <button
+                className="px-4 py-3 mt-2 text-sm font-bold rounded-xl text-navy-india/80 hover:bg-navy-india/5 uppercase tracking-wider text-left"
+                onClick={() => {
+                  void logout();
+                  setIsOpen(false);
+                }}
+              >
+                Logout
+              </button>
+            )}
           </nav>
         </div>
       )}

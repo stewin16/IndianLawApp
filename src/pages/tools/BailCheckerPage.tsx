@@ -9,15 +9,15 @@ import {
     ArrowLeft, Sparkles, Loader2, CheckCircle,
     ExternalLink, Copy, Unlock, AlertCircle, ShieldCheck, Scale
 } from "lucide-react";
-import { checkBailEligibility } from "@/services/geminiService";
 import { toast } from "sonner";
+import { generateLegalContent, parseModelJson } from "@/services/groqService";
 
 interface BailResult {
-    is_bailable: boolean;
+    bailable: boolean;
     conditions: string[];
-    legal_provisions: string[];
-    risk_factors: string[];
-    recommendation: string;
+    section: string;
+    provision: string;
+    reasoning: string;
 }
 
 const BailCheckerPage = () => {
@@ -33,15 +33,30 @@ const BailCheckerPage = () => {
         setResult(null);
 
         try {
-            const data = await checkBailEligibility(offense, section);
-            if (data) {
-                setResult(data);
-            } else {
-                toast.error("Error processing your request. Please try again.");
-            }
-        } catch (error) {
+            const systemPrompt = `You are an expert Indian Criminal Law Consultant. 
+            Analyze the bail eligibility for the given offense description and section. 
+            Output must be a valid JSON object with this exact structure: 
+            { 
+              "bailable": boolean, 
+              "section": "string representing applicable BNS/IPC section", 
+              "provision": "string summarizing the legal provision", 
+              "conditions": ["array of strings for bail conditions"], 
+              "reasoning": "detailed legal reasoning for the classification" 
+            }`;
+
+            const prompt = `Analyze bail eligibility for:
+            Offense: ${offense}
+            Section (if provided): ${section}`;
+            
+            const content = await generateLegalContent(prompt, systemPrompt);
+            const parsed = parseModelJson<BailResult>(content, "bail eligibility", "object");
+            
+            setResult(parsed);
+            toast.success("Bail eligibility analyzed!");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
             console.error("Bail Check Error:", error);
-            toast.error("Connection error. Please check your internet connection.");
+            toast.error(`Analysis Failed: ${message}`);
         } finally {
             setIsLoading(false);
         }
@@ -49,7 +64,7 @@ const BailCheckerPage = () => {
 
     const copyResult = () => {
         if (result) {
-            const text = `Bail Eligibility: ${result.is_bailable ? 'Bailable' : 'Non-Bailable'}\nProvisions: ${result.legal_provisions.join(', ')}\nConditions: ${result.conditions.join(', ')}\nRecommendation: ${result.recommendation}`;
+            const text = `Bail Eligibility: ${result.bailable ? 'Bailable' : 'Non-Bailable'}\nSection: ${result.section}\nProvision: ${result.provision}\nConditions: ${result.conditions.join(', ')}\nReasoning: ${result.reasoning}`;
             navigator.clipboard.writeText(text);
             toast.success("Copied to clipboard");
         }
@@ -199,14 +214,14 @@ const BailCheckerPage = () => {
                         </div>
 
                         <div className="space-y-6 text-gray-700">
-                            <div className={`p-4 rounded-xl border flex items-center gap-4 ${result.is_bailable ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${result.is_bailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                    {result.is_bailable ? <ShieldCheck className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+                             <div className={`p-4 rounded-xl border flex items-center gap-4 ${result.bailable ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${result.bailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                    {result.bailable ? <ShieldCheck className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
                                 </div>
                                 <div>
                                     <p className="text-xs uppercase font-bold tracking-wider opacity-60">Eligibility Status</p>
-                                    <p className={`text-xl font-black ${result.is_bailable ? 'text-green-700' : 'text-red-700'}`}>
-                                        {result.is_bailable ? 'BAILABLE OFFENCE' : 'NON-BAILABLE OFFENCE'}
+                                    <p className={`text-xl font-black ${result.bailable ? 'text-green-700' : 'text-red-700'}`}>
+                                        {result.bailable ? 'BAILABLE OFFENCE' : 'NON-BAILABLE OFFENCE'}
                                     </p>
                                 </div>
                             </div>
@@ -217,29 +232,18 @@ const BailCheckerPage = () => {
                                         <Scale className="w-4 h-4 text-green-600" />
                                         Legal Provisions
                                     </h4>
-                                    <ul className="space-y-1">
-                                        {result.legal_provisions.map((p, i) => (
-                                            <li key={i} className="text-sm flex items-start gap-2">
-                                                <span className="text-green-600 font-bold">•</span>
-                                                {p}
-                                            </li>
-                                        ))}
-                                    </ul>
+                                    <p className="text-sm font-bold text-navy-india">{result.section}</p>
+                                    <p className="text-xs text-gray-600 mt-1">{result.provision}</p>
                                 </div>
 
                                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                                     <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
                                         <AlertCircle className="w-4 h-4 text-amber-600" />
-                                        Risk Factors
+                                        Analysis Reasoning
                                     </h4>
-                                    <ul className="space-y-1">
-                                        {result.risk_factors.map((r, i) => (
-                                            <li key={i} className="text-sm flex items-start gap-2">
-                                                <span className="text-amber-600 font-bold">•</span>
-                                                {r}
-                                            </li>
-                                        ))}
-                                    </ul>
+                                    <p className="text-xs text-gray-600 leading-relaxed">
+                                        {result.reasoning}
+                                    </p>
                                 </div>
                             </div>
 
@@ -255,9 +259,9 @@ const BailCheckerPage = () => {
                             </div>
 
                             <div className="p-4 bg-green-50/50 rounded-xl border border-green-100">
-                                <h4 className="font-bold text-gray-900 mb-1">AI Recommendation</h4>
+                                <h4 className="font-bold text-gray-900 mb-1">AI Reasoning & Recommendation</h4>
                                 <p className="text-sm text-gray-700 leading-relaxed">
-                                    {result.recommendation}
+                                    {result.reasoning}
                                 </p>
                             </div>
                         </div>
@@ -279,7 +283,7 @@ const BailCheckerPage = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="mt-8 grid grid-cols-2 gap-4"
+                    className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
                     <a
                         href="https://ecourts.gov.in"

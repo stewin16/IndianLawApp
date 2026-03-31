@@ -15,14 +15,14 @@ export default function TimelineSection() {
               </p>
               <div className="flex flex-col gap-4">
                 <div className="flex gap-3 items-start">
-                  <span className="mt-1 flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-saffron/20 text-saffron text-xs">✕</span>
+                  <span className="mt-1 flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-saffron/20 text-saffron text-xs">x</span>
                   <div>
                     <span className="block text-sm font-semibold text-gray-900">Colonial Legacy</span>
                     <span className="text-xs text-gray-500">Statutes designed for a different era, lacking modern context.</span>
                   </div>
                 </div>
                 <div className="flex gap-3 items-start">
-                  <span className="mt-1 flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-saffron/20 text-saffron text-xs">✕</span>
+                  <span className="mt-1 flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-saffron/20 text-saffron text-xs">x</span>
                   <div>
                     <span className="block text-sm font-semibold text-gray-900">Manual Lookup</span>
                     <span className="text-xs text-gray-500">Lawyers spending hours cross-referencing physical volumes.</span>
@@ -64,7 +64,7 @@ export default function TimelineSection() {
                    </div>
                    <div>
                      <span className="block text-sm font-semibold text-navy-india">AI-Powered Synthesis</span>
-                     <span className="text-xs text-gray-500">Gemini AI synthesizes changes, highlighting key legal shifts.</span>
+                     <span className="text-xs text-gray-500">Advanced AI models synthesize changes, highlighting key legal shifts in real-time.</span>
                    </div>
                  </div>
                </div>
