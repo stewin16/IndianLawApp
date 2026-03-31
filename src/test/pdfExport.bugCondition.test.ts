@@ -209,6 +209,7 @@ describe("PDF Export Bug Condition Exploration", () => {
   it("should handle timeout scenarios gracefully", async () => {
     // Mock setTimeout to simulate timeout scenarios
     const originalSetTimeout = global.setTimeout;
+        // @ts-ignore
     global.setTimeout = vi.fn().mockImplementation((callback, delay) => {
       if (delay === 30000) {
         // Simulate timeout by not calling the callback
