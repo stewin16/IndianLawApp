@@ -47,7 +47,6 @@ const safeFileName = (value: string) =>
     })
     .join("")
     .replace(/\s+/g, "_");
-
 export const exportStructuredPdf = async ({
   title,
   fileName,
@@ -55,195 +54,139 @@ export const exportStructuredPdf = async ({
   sections,
   footer,
 }: ExportStructuredPdfOptions) => {
-  const host = document.createElement("div");
-  host.style.position = "fixed";
-  host.style.left = "-99999px";
-  host.style.top = "0";
-  host.style.width = "595px";
-  host.style.background = "#ffffff";
-  host.style.color = "#111111";
-  host.style.padding = "30px";
-  host.style.fontFamily = "Arial, Noto Sans, Segoe UI, sans-serif";
+  // 1. Prepare Filenaming
+  const cleanName = fileName.toLowerCase().endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+  const secureFileName = safeFileName(cleanName);
 
-  // Create branding header
-  const brandHeader = document.createElement("div");
-  brandHeader.style.display = "flex";
-  brandHeader.style.alignItems = "center";
-  brandHeader.style.justifyContent = "space-between";
-  brandHeader.style.marginBottom = "20px";
-  brandHeader.style.paddingBottom = "15px";
-  brandHeader.style.borderBottom = "2px solid #ff9933"; // Saffron border
-
-  const logoImg = document.createElement("img");
-  logoImg.src = "/logo.png";
-  logoImg.style.height = "35px";
-  logoImg.style.width = "auto";
-  brandHeader.appendChild(logoImg);
-
-  const brandText = document.createElement("div");
-  brandText.textContent = "LEGALAI DIGITAL INDIA • OFFICIAL REPORT";
-  brandText.style.fontSize = "9px";
-  brandText.style.color = "#999";
-  brandText.style.fontWeight = "bold";
-  brandText.style.letterSpacing = "1px";
-  brandHeader.appendChild(brandText);
-
-  host.appendChild(brandHeader);
-
-  const heading = document.createElement("h1");
-  heading.textContent = sanitizeText(title) || "Document";
-  heading.style.fontSize = "22px";
-  heading.style.margin = "0 0 14px";
-  heading.style.color = "#000080"; // Navy India
-  host.appendChild(heading);
-
-  if (metadata.length > 0) {
-    const metaBox = document.createElement("div");
-    metaBox.style.marginBottom = "16px";
-    metaBox.style.paddingBottom = "12px";
-    metaBox.style.borderBottom = "1px solid #ddd";
-    metaBox.style.fontSize = "11px";
-    metaBox.style.color = "#555";
-
-    metadata.forEach((item) => {
-      const row = document.createElement("div");
-      row.textContent = sanitizeText(item);
-      row.style.marginBottom = "4px";
-      metaBox.appendChild(row);
+  try {
+    const doc = new jsPDF({
+      orientation: "p",
+      unit: "pt",
+      format: "a4",
+      compress: true
     });
 
-    host.appendChild(metaBox);
-  }
+    let currentY = 50;
+    const margin = 45;
+    const pageWidth = 515; // ~595 - (2*40)
 
-  sections.forEach((section) => {
-    const block = document.createElement("section");
-    block.style.marginBottom = "14px";
+    // Header Branding (Draw manually)
+    // Saffron Top Border
+    doc.setDrawColor(255, 153, 51); // Saffron
+    doc.setLineWidth(2);
+    doc.line(margin, currentY, margin + pageWidth, currentY);
+    currentY += 15;
 
-    if (section.label) {
-      const label = document.createElement("h2");
-      label.textContent = sanitizeText(section.label);
-      label.style.fontSize = "13px";
-      label.style.margin = "0 0 6px";
-      label.style.color = "#222";
-      block.appendChild(label);
+    // Logo Placeholder or Text (since we cannot easily base64 in this context)
+    doc.setTextColor(0, 0, 128); // Navy India
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("LEGALAI INDIA", margin, currentY);
+    
+    doc.setTextColor(153, 153, 153); // Gray
+    doc.setFontSize(8);
+    doc.text("OFFICIAL REPORT • " + new Date().toLocaleDateString(), margin + pageWidth, currentY, { align: "right" });
+    
+    currentY += 25;
+
+    // Title
+    doc.setTextColor(0, 0, 128); // Navy India
+    doc.setFontSize(22);
+    const titleLines = doc.splitTextToSize(toPlainText(title), pageWidth);
+    doc.text(titleLines, margin, currentY);
+    currentY += (titleLines.length * 24) + 15;
+
+    // Metadata
+    if (metadata.length > 0) {
+      doc.setDrawColor(221, 221, 221);
+      doc.setLineWidth(0.5);
+      doc.line(margin, currentY, margin + pageWidth, currentY);
+      currentY += 15;
+      
+      doc.setTextColor(102, 102, 102);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      
+      metadata.forEach(m => {
+        if (yOverflow(currentY, 12)) { doc.addPage(); currentY = 40; }
+        doc.text(toPlainText(m), margin, currentY);
+        currentY += 12;
+      });
+      currentY += 10;
     }
 
-    const content = document.createElement("div");
-    content.textContent = sanitizeText(section.text);
-    content.style.whiteSpace = "pre-wrap";
-    content.style.lineHeight = "1.55";
-    content.style.fontSize = "12px";
-    block.appendChild(content);
-    host.appendChild(block);
-  });
-
-  if (footer) {
-    const foot = document.createElement("div");
-    foot.textContent = sanitizeText(footer);
-    foot.style.marginTop = "10px";
-    foot.style.paddingTop = "10px";
-    foot.style.borderTop = "1px solid #eee";
-    foot.style.fontSize = "10px";
-    foot.style.color = "#666";
-    host.appendChild(foot);
-  }
-
-  document.body.appendChild(host);
-
-  // Pre-load logo to avoid canvas tainting/timeout issues
-  const logo = new Image();
-  logo.crossOrigin = "anonymous";
-  logo.src = "/logo.png";
-  
-  // Wait for logo or proceed anyway after 1s
-  await Promise.race([
-    new Promise(r => logo.onload = r),
-    new Promise(r => setTimeout(r, 1000))
-  ]);
-
-  let retryCount = 0;
-  const maxRetries = 2;
-  const finalFileName = fileName.toLowerCase().endsWith(".pdf") ? fileName : `${fileName}.pdf`;
-  const secureFileName = safeFileName(finalFileName);
-
-  while (retryCount <= maxRetries) {
-    try {
-      const doc = new jsPDF({
-        orientation: "p",
-        unit: "pt",
-        format: "a4",
-        compress: true
-      });
-
-      await new Promise<void>((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          reject(new Error("PDF generation timed out."));
-        }, 30000);
-
-        doc.html(host, {
-          x: 40,
-          y: 40,
-          width: 515,
-          windowWidth: 800,
-          autoPaging: "text",
-          html2canvas: {
-            scale: 1,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-            // Inline the logo effectively by the time html2canvas runs
-          },
-          callback: () => {
-            clearTimeout(timeoutId);
-            resolve();
-          },
-        });
-      });
-
-      // Standard Download
-      doc.save(secureFileName);
-      break; 
-      
-    } catch (error) {
-      retryCount++;
-      console.warn(`PDF Attempt ${retryCount} failed:`, error);
-      
-      if (retryCount > maxRetries) {
-        // Fallback to text-only mode
-        try {
-          const textDoc = new jsPDF("p", "pt", "a4");
-          let y = 40;
-          textDoc.setFont("helvetica", "bold");
-          textDoc.setFontSize(18);
-          textDoc.text(toPlainText(title), 40, y);
-          y += 40;
-          
-          textDoc.setFont("helvetica", "normal");
-          textDoc.setFontSize(10);
-          sections.forEach(s => {
-            if (y > 750) { textDoc.addPage(); y = 40; }
-            if (s.label) {
-              textDoc.setFont("helvetica", "bold");
-              textDoc.text(toPlainText(s.label), 40, y);
-              y += 15;
-            }
-            textDoc.setFont("helvetica", "normal");
-            const lines = textDoc.splitTextToSize(toPlainText(s.text), 515);
-            textDoc.text(lines, 40, y);
-            y += (lines.length * 14) + 20;
-          });
-          
-          textDoc.save(secureFileName);
-          break;
-        } catch (f) {
-          throw new Error("Critical PDF failure.");
-        }
+    // Sections
+    sections.forEach(s => {
+      // Label
+      if (s.label) {
+        if (yOverflow(currentY, 20)) { doc.addPage(); currentY = margin; }
+        doc.setTextColor(34, 34, 34);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text(toPlainText(s.label), margin, currentY);
+        currentY += 15;
       }
-      await new Promise(r => setTimeout(r, 300));
-    }
-  }
 
-  // Final Cleanup
-  if (host.parentNode) host.parentNode.removeChild(host);
+      // Text
+      doc.setTextColor(85, 85, 85);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10.5);
+      const textLines = doc.splitTextToSize(toPlainText(s.text), pageWidth);
+      
+      textLines.forEach((line: string) => {
+        if (yOverflow(currentY, 14)) { 
+          doc.addPage(); 
+          currentY = margin; 
+          // Re-draw top line on new page for branding
+          doc.setDrawColor(255, 153, 51);
+          doc.line(margin, 30, margin + pageWidth, 30);
+          currentY = 45;
+        }
+        doc.text(line, margin, currentY);
+        currentY += 14;
+      });
+      currentY += 20;
+    });
+
+    // Footer
+    if (footer) {
+      if (yOverflow(currentY, 40)) { doc.addPage(); currentY = 40; }
+      doc.setDrawColor(238, 238, 238);
+      doc.line(margin, currentY, margin + pageWidth, currentY);
+      currentY += 15;
+      doc.setTextColor(153, 153, 153);
+      doc.setFontSize(8);
+      doc.text(toPlainText(footer), margin, currentY, { maxWidth: pageWidth });
+    }
+
+    // Helper for page overflow
+    function yOverflow(y: number, padding: number) {
+      return y + padding > 800; // A4 height is ~841pt
+    }
+
+    // FINAL EXPORT
+    // Try primary save
+    try {
+      doc.save(secureFileName);
+    } catch (saveError) {
+      console.error("Standard save failed, triggering anchor download:", saveError);
+      const blob = doc.output('blob');
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = secureFileName;
+      a.type = 'application/pdf';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+    }
+
+  } catch (error) {
+    console.error("PDF Engine Crash:", error);
+    // Absolute Last Resort: Text Area Export
+    alert("Generation failed. Please copy the text manually from the screen.");
+  }
 };
