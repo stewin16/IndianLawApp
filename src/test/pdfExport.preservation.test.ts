@@ -302,6 +302,7 @@ describe("PDF Export Preservation Properties", () => {
       }
       return originalSetTimeout(callback, delay);
     });
+        // @ts-ignore
     global.setTimeout = mockSetTimeout;
 
     const testOptions = {
