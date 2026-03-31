@@ -33,18 +33,35 @@ class RAGEngine:
         # Simple in-memory response cache
         self._cache: Dict[str, Dict[str, Any]] = {}
 
-        # Initialize ChromaDB Client
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        chroma_path = os.path.join(base_dir, "chroma_db")
+        # Lazy initialization placeholders
+        self.db_client = None
+        self.ef = None
+        self.collection = None
         
+        # Determine Chroma path
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.chroma_path = os.path.join(base_dir, "chroma_db")
+
+    def _get_collection(self):
+        """Lazy load the vector database collection."""
+        if self.collection is not None:
+            return self.collection
+            
+        print(f"[RAGEngine] Initializing Vector DB connection (Lazy Mode)...")
         try:
-            self.db_client = chromadb.PersistentClient(path=chroma_path)
-            self.ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+            if self.db_client is None:
+                self.db_client = chromadb.PersistentClient(path=self.chroma_path)
+            
+            if self.ef is None:
+                print(f"[RAGEngine] Loading Embedding Model: all-MiniLM-L6-v2")
+                self.ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+            
             self.collection = self.db_client.get_collection(name="legal_knowledge", embedding_function=self.ef)
-            print(f"[RAGEngine] Connected to Vector DB at {chroma_path}. ({self.collection.count()} docs)")
+            print(f"[RAGEngine] Connected to Vector DB. ({self.collection.count()} docs)")
+            return self.collection
         except Exception as e:
-             print(f"[RAGEngine] ⚠️ Vector DB Connection Error: {e}. Ensure 'ingest_vector.py' has been run.")
-             self.collection = None
+             print(f"[RAGEngine] ⚠️ Vector DB Error: {e}")
+             return None
 
     def _classify_query(self, query: str) -> str:
         """Classify query as 'simple' or 'legal' for optimization."""
@@ -339,8 +356,9 @@ class RAGEngine:
         # 1. Retrieve from Vector DB
         try:
             print(f"[RAGEngine] Starting Vector Search for '{search_query}'...", flush=True)
-            if self.collection:
-                results = self.collection.query(
+            collection = self._get_collection()
+            if collection:
+                results = collection.query(
                     query_texts=[search_query], # Use the (potentially) translated query
                     n_results=5,
                     include=["documents", "metadatas", "distances"]
