@@ -2,7 +2,7 @@
 FROM python:3.9-slim
 
 # Install system dependencies for Tesseract, Poppler, and OpenCV
-# libgl1-mesa-glx and libglib2.0-0 are needed for many ML libraries
+# libgl1 and libglib2.0-0 are needed for many ML libraries
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-hin \
