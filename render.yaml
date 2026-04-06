@@ -1,55 +1,30 @@
-# Render Blueprint (Infrastructure-as-Code)
-# Documentation: https://render.com/docs/blueprints
-
+# Render Blueprint for LegalAI (Unified Deployment)
 services:
 
-  # 1. RAG SERVICE (Python/Docker) - Handles Vector Search, OCR (Tesseract), and RAG
+  # 1. RAG BACKEND (FastAPI/Python)
   - type: web
     name: legalai-rag
     env: docker
-    region: singapore # Change to your preferred region (e.g., oregon, frankfurt)
-    plan: free # Free tier (512MB RAM). Suggest 'starter' or higher for faster OCR.
+    region: singapore
+    plan: free
     rootDir: rag_service
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: GROQ_API_KEY
         sync: false # Set in Render Dashboard
-      - key: GOOGLE_API_KEY
-        sync: false # Optional (for Gemini fallback)
       - key: PORT
         value: "10000"
 
-  # 2. NODE GATEWAY (Express) - API Gateway, Rate Limiting, and Proxy
-  - type: web
-    name: legalai-api
-    env: node
-    region: singapore
-    plan: free
-    rootDir: server
-    buildCommand: npm install
-    startCommand: node index.js
-    autoDeploy: true
-    envVars:
-      - key: PORT
-        value: "3001"
-      - key: RAG_SERVICE_URL
-        sync: false # Set manually to http://legalai-rag:10000 once deployed
-      - key: GROQ_API_KEY
-        sync: false # Set in Render Dashboard
-      - key: CORS_ORIGIN
-        value: "*" # Set to your frontend URL after deployment for security
-
-  # 3. FRONTEND (Vite/React) - Static Site
-  - type: web
-    runtime: static
+  # 2. FRONTEND (Vite/React)
+  - type: static
     name: legalai-frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     autoDeploy: true
     envVars:
       - key: VITE_RAG_API_BASE_URL
-        sync: false # Set manually to the public URL of 'legalai-api'
+        sync: false # Set this to the public URL of 'legalai-rag' once deployed
       - key: VITE_GROQ_API_KEY
         sync: false
       - key: VITE_FIREBASE_API_KEY
