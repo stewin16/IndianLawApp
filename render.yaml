@@ -41,7 +41,8 @@ services:
         value: "*" # Set to your frontend URL after deployment for security
 
   # 3. FRONTEND (Vite/React) - Static Site
-  - type: static
+  - type: web
+    runtime: static
     name: legalai-frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
