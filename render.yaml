@@ -2,7 +2,7 @@ services:
   # ── RAG / Python Backend ──────────────────────────────────────────────────
   - type: web
     name: legalai-rag
-    env: docker
+    runtime: docker
     region: singapore
     plan: free
     rootDir: rag_service
@@ -22,7 +22,7 @@ services:
   # into the bundle during `npm run build`, then serve with `serve`.
   - type: web
     name: legalai-frontend
-    env: node
+    runtime: node
     region: singapore
     plan: free
     buildCommand: npm install && npm run build
