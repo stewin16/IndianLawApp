@@ -20,7 +20,7 @@ const loadData = () => {
     
     // Initialize Fuzzy Search Engine
     fuseSearcher = new Fuse(legalDB, {
-      keys: ["Chapter", "Section", "Title", "Description"],
+      keys: ["Chapter", "Section", "Section _name", "Description"],
       threshold: 0.3, // 0.0 is perfect match, 1.0 is match anything
       ignoreLocation: true,
       includeScore: true,
@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (searchResults.length > 0) {
       contextStr = searchResults.map(r => {
         const law = r.item;
-        return `Law: BNS Section ${law.Section} (${law.Chapter})\nTitle: ${law.Title}\nDescription: ${law.Description}`;
+        return `Law: BNS Section ${law.Section} (${law.Chapter})\nTitle: ${law["Section _name"]}\nDescription: ${law.Description}`;
       }).join("\n\n");
     }
   }
