@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Scale, Zap, BookOpen, Mic, MicOff, Download, Sparkles, Send, Menu, Plus, Trash2, MessageSquare, ExternalLink, Copy, Check, Volume2, Search, X, ChevronRight, ArrowRight, Wifi, WifiOff, RotateCw } from "lucide-react";
+import { Loader2, Scale, Zap, BookOpen, Mic, MicOff, Download, Sparkles, Send, Menu, Plus, Trash2, MessageSquare, ExternalLink, Copy, Check, Volume2, Search, X, ChevronRight, ArrowRight } from "lucide-react";
 import Header from "@/components/Header";
 import TricolorBackground from "@/components/TricolorBackground";
 import ReactMarkdown from "react-markdown";
@@ -156,23 +156,7 @@ const ChatPage = () => {
   const [isSpeaking, setIsSpeaking] = useState<number | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
-  const [isCheckingGroq, setIsCheckingGroq] = useState(false);
-  const [groqStatus, setGroqStatus] = useState({
-    state: "connected",
-    activeModel: import.meta.env.VITE_GROQ_MODEL || "Llama 3.3 70B",
-    latencyMs: null,
-    message: "Groq Cloud Active",
-  });
-
-  const refreshGroqStatus = useCallback(async () => {
-    setIsCheckingGroq(true);
-    // Mimic a status check
-    setTimeout(() => {
-      setIsCheckingGroq(false);
-      setGroqStatus(prev => ({ ...prev, state: "connected" }));
-      toast.success("Groq API connection verified.");
-    }, 500);
-  }, []);
+  // AI backend connection — wire up in src/services/aiService.ts
 
   const domains = [
     { id: "all", label: "All Laws", icon: <Scale className="w-3 h-3" /> },
@@ -243,9 +227,7 @@ const ChatPage = () => {
     return () => clearInterval(interval);
   }, [isLoading, t.loadingTexts]);
 
-  useEffect(() => {
-    // Gemini health check removed
-  }, []);
+
 
   const startListening = () => {
     if ('webkitSpeechRecognition' in window) {
@@ -438,7 +420,7 @@ const ChatPage = () => {
         const newMsgs = [...prev];
         newMsgs[newMsgs.length - 1] = { 
           ...newMsgs[newMsgs.length - 1], 
-          content: "Sorry, I encountered an error connecting to the Groq AI service. Please check your API key and internet connection." 
+          content: "Sorry, I encountered an error connecting to the AI service. Please check your backend configuration in `src/services/aiService.ts`." 
         };
         return newMsgs;
       });
@@ -657,20 +639,12 @@ const ChatPage = () => {
                   <div className="flex flex-col">
                     <h2 className="text-sm font-bold text-navy-india flex items-center gap-2">
                       Legal AI Assistant
-                      <span
-                        className={cn(
-                          "px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1",
-                          groqStatus.state === "connected" && "bg-green-india/10 text-green-india",
-                          groqStatus.state === "disconnected" && "bg-red-500/10 text-red-500"
-                        )}
-                        title={groqStatus.message}
-                      >
-                        {groqStatus.state === "disconnected" ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
-                        {groqStatus.state === "connected" ? "Groq Online" : "Cloud Offline"}
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-saffron/10 text-saffron">
+                        Indian Law
                       </span>
                     </h2>
                     <span className="text-[11px] text-navy-india/50">
-                      {groqStatus.activeModel ? `Model: ${groqStatus.activeModel}` : "Indian Law Research Assistant"}
+                      Indian Law Research Assistant
                     </span>
                   </div>
               </div>
@@ -724,19 +698,6 @@ const ChatPage = () => {
                     HI
                   </Button>
                 </div>
-
-                <div className="h-6 w-px bg-navy-india/10" />
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={refreshGroqStatus}
-                  disabled={isCheckingGroq}
-                  className="h-9 w-9 text-navy-india/40 hover:text-navy-india hover:bg-navy-india/5 rounded-xl transition-colors"
-                  title="Refresh Groq status"
-                >
-                  <RotateCw className={cn("w-4 h-4", isCheckingGroq && "animate-spin")} />
-                </Button>
 
                 <div className="h-6 w-px bg-navy-india/10" />
 
