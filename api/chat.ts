@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Groq from "groq-sdk";
 import Fuse from "fuse.js";
-import legalDB from "./data/bns_data.json" assert { type: "json" };
+import { legalDB } from "./data/bns_data";
 
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
