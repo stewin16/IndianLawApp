@@ -6,10 +6,9 @@ import { Badge } from "./ui/badge";
 
 interface NewsItem {
     title: string;
-    summary: string;
-    date: string;
-    category: string;
-    source_url?: string;
+    link: string;
+    pubDate: string;
+    source: string;
 }
 
 const LegalNews = () => {
@@ -69,28 +68,26 @@ const LegalNews = () => {
                             className="group glass-tricolor-card p-6 flex flex-col h-full"
                         >
                             <div className="flex items-center justify-between mb-4">
-                                <Badge variant="secondary" className="bg-saffron/10 text-saffron border-saffron/20">
-                                    {item.category}
+                                <Badge variant="secondary" className="bg-saffron/10 text-saffron border-saffron/20 truncate max-w-[150px]">
+                                    {item.source}
                                 </Badge>
-                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                <div className="flex items-center gap-1.5 text-xs text-gray-400 shrink-0">
                                     <Calendar className="w-3 h-3" />
-                                    {item.date}
+                                    {new Date(item.pubDate).toLocaleDateString()}
                                 </div>
                             </div>
                             
-                            <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-saffron transition-colors">
+                            <h3 className="text-lg font-bold text-gray-900 mb-3 group-hover:text-saffron transition-colors line-clamp-3">
                                 {item.title}
                             </h3>
                             
-                            <p className="text-gray-600 text-sm leading-relaxed mb-6 flex-grow">
-                                {item.summary}
-                            </p>
+                            <div className="flex-grow"></div>
                             
-                            <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Legal Bulletin</span>
-                                <button className="text-saffron hover:text-saffron-dark transition-colors">
-                                    <ExternalLink className="w-4 h-4" />
-                                </button>
+                            <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-4">
+                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Live Feed</span>
+                                <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-saffron hover:text-saffron-dark transition-colors flex items-center gap-1 text-sm font-medium">
+                                    Read Article <ExternalLink className="w-4 h-4" />
+                                </a>
                             </div>
                         </motion.div>
                     ))}

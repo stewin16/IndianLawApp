@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "CommonJS",
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": false
   }

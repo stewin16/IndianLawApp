@@ -1,24 +1,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Groq from "groq-sdk";
 import Fuse from "fuse.js";
-import * as fs from "fs";
-import * as path from "path";
+import legalDB from "./data/bns_data.json" assert { type: "json" };
 
 // Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Cache the database and search engine so warm starts are instant
-let legalDB: any[] = [];
+// Cache the search engine so warm starts are instant
 let fuseSearcher: Fuse<any> | null = null;
 
 const loadData = () => {
-  if (legalDB.length > 0) return;
+  if (fuseSearcher) return;
   try {
-    const dataPath = path.join(process.cwd(), "api", "data", "bns_data.json");
-    const raw = fs.readFileSync(dataPath, "utf-8");
-    legalDB = JSON.parse(raw);
-    
-    // Initialize Fuzzy Search Engine
+    // Initialize Fuzzy Search Engine directly from imported JSON
     fuseSearcher = new Fuse(legalDB, {
       keys: ["Chapter", "Section", "Section _name", "Description"],
       threshold: 0.3, // 0.0 is perfect match, 1.0 is match anything
