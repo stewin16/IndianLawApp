@@ -1,10 +1,4 @@
-/**
- * aiService.ts
- *
- * Connects to the Vercel Serverless Architecture.
- * - Uses /api/chat for Lightning Fast Fuse.js RAG + Groq JSON
- * - Uses /api/news for Rate-Limitless RSS Legal News
- */
+import Groq from "groq-sdk";
 
 export interface Message {
   role: "system" | "user" | "assistant";
@@ -18,15 +12,11 @@ export type Citation = {
   [key: string]: unknown;
 };
 
-// Types for the new structured JSON response
-export interface StructuredAIResponse {
-  topic?: string;
-  risk_level?: string;
-  summary?: string;
-  actionable_steps?: string[];
-  laws_cited?: Array<{ act: string; section: string; description: string }>;
-  common_mistakes?: string[];
-}
+// Use purely frontend browser-side Groq execution to completely bypass Vercel serverless crashes
+const groq = new Groq({
+  apiKey: import.meta.env.VITE_GROQ_API_KEY || "dummy",
+  dangerouslyAllowBrowser: true 
+});
 
 export const chatStream = async (
   messages: Message[],
@@ -39,72 +29,44 @@ export const chatStream = async (
   if (!messages.length) return;
 
   try {
-    // Show a loading state to the user while Groq generates the JSON
-    onUpdate("Analyzing legal context and generating actionable advice...");
+    if (!import.meta.env.VITE_GROQ_API_KEY) {
+      onUpdate("VITE_GROQ_API_KEY is missing in Vercel. Please add it to your Environment Variables.");
+      return;
+    }
 
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, language }),
+    onUpdate("Thinking...");
+
+    const systemPrompt = `You are a professional Indian Legal AI Assistant. The user wants the response in ${language === "hi" ? "Hindi" : "English"}. You MUST structure your final response exactly using Markdown. Start with the direct answer, then list any 'Relevant Laws' (like BNS sections) at the bottom. Keep it professional.`;
+
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.2,
+      max_tokens: 1500,
     });
 
-    if (!response.ok) throw new Error("API returned an error");
+    const responseContent = chatCompletion.choices[0]?.message?.content || "No response generated.";
+    onUpdate(responseContent);
 
-    const data: StructuredAIResponse = await response.json();
-
-    // Format the JSON back into a beautiful Markdown string for the frontend UI
-    let formattedResponse = `### ${data.topic || "Legal Analysis"}\n`;
-    if (data.risk_level) {
-      const riskColor = data.risk_level.toLowerCase() === "high" ? "🔴" : data.risk_level.toLowerCase() === "medium" ? "🟡" : "🟢";
-      formattedResponse += `**Risk Level:** ${riskColor} ${data.risk_level}\n\n`;
-    }
-    
-    formattedResponse += `**Summary:**\n${data.summary || "No summary provided."}\n\n`;
-
-    if (data.actionable_steps && data.actionable_steps.length > 0) {
-      formattedResponse += `**Actionable Steps:**\n`;
-      data.actionable_steps.forEach((step, i) => {
-        formattedResponse += `${i + 1}. ${step}\n`;
-      });
-      formattedResponse += "\n";
-    }
-
-    if (data.common_mistakes && data.common_mistakes.length > 0) {
-      formattedResponse += `**Common Mistakes to Avoid:**\n`;
-      data.common_mistakes.forEach(mistake => {
-        formattedResponse += `- ${mistake}\n`;
-      });
-      formattedResponse += "\n";
-    }
-
-    // Map the JSON laws_cited back to the Citations array format the UI expects
-    let citations: Citation[] = [];
-    if (data.laws_cited && data.laws_cited.length > 0) {
-      formattedResponse += `**Relevant Laws:**\n`;
-      data.laws_cited.forEach(law => {
-        formattedResponse += `- **${law.act} ${law.section}**: ${law.description}\n`;
-        citations.push({
-          source: law.act,
-          section: law.section,
-          text: law.description
-        });
-      });
-    }
-
-    // Call onUpdate with the final formatted string and citations
-    onUpdate(formattedResponse, citations.length > 0 ? citations : undefined);
-
-  } catch (error) {
+  } catch (error: any) {
     console.error("Chat Error:", error);
-    onUpdate("Sorry, I encountered an error. Please try again.");
+    onUpdate(`Error: ${error.message}. Please check your VITE_GROQ_API_KEY.`);
   }
 };
 
 export const getLegalNews = async () => {
   try {
-    const response = await fetch("/api/news");
-    if (!response.ok) throw new Error("News API failed");
-    return await response.json();
+    // We use a free, CORS-friendly public proxy for RSS to bypass all backend server requirements
+    const response = await fetch("https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss/search?q=Supreme+Court+India+OR+Indian+Law&hl=en-IN&gl=IN&ceid=IN:en");
+    if (!response.ok) throw new Error("News fetch failed");
+    
+    const data = await response.json();
+    return data.items.slice(0, 10).map((item: any) => ({
+      title: item.title,
+      link: item.link,
+      pubDate: item.pubDate,
+      source: "Google News",
+    }));
   } catch (error) {
     console.error("News fetch error", error);
     return [];
@@ -117,13 +79,13 @@ export const generateLegalContent = async (
   _systemPrompt: string = ""
 ): Promise<string> => {
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: [{ role: "user", content: prompt }], language: "en" }),
+    if (!import.meta.env.VITE_GROQ_API_KEY) return "VITE_GROQ_API_KEY missing.";
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.2,
     });
-    const data = await response.json();
-    return data.summary || JSON.stringify(data);
+    return chatCompletion.choices[0]?.message?.content || "No content generated.";
   } catch (e) {
     return "Error generating content.";
   }
