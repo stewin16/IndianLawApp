@@ -136,3 +136,11 @@ export const riskAnalyzer = async (_contractText: string) => {
 export const compareLegalTexts = async (_text1: string, _text2: string) => {
   return { change_type: "Unknown", legal_impact: "Requires full document parse.", penalty_difference: "—", key_changes: [], verdict: "N/A" };
 };
+
+export const parseModelJson = <T = any>(jsonString: string, _arg2?: any, _arg3?: any): T => {
+  try {
+    return JSON.parse(jsonString) as T;
+  } catch (e) {
+    return {} as T;
+  }
+};
