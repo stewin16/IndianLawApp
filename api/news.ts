@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         url: item.link,
         date: item.pubDate || new Date().toISOString(),
         category: relevance,
-        source: item.source || "Google News (India)"
+        source: (item as any).source || "Google News (India)"
       };
     });
 
