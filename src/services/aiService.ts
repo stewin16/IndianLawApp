@@ -24,14 +24,14 @@ const MODEL = "llama-3.3-70b-versatile";
 async function callGroq(
   systemPrompt: string,
   userContent: string,
-  maxTokens = 1500
+  maxTokens = 2000
 ): Promise<string> {
   if (!import.meta.env.VITE_GROQ_API_KEY) {
-    return "⚠️ VITE_GROQ_API_KEY is not set. Please add it to your Vercel Environment Variables and redeploy.";
+    return "⚠️ **VITE_GROQ_API_KEY is not set.** Please add it to your Vercel Environment Variables and redeploy.";
   }
   const res = await groq.chat.completions.create({
     model: MODEL,
-    temperature: 0.2,
+    temperature: 0.3,
     max_tokens: maxTokens,
     messages: [
       { role: "system", content: systemPrompt },
@@ -40,6 +40,65 @@ async function callGroq(
   });
   return res.choices[0]?.message?.content?.trim() || "No response generated.";
 }
+
+// ─── MASTER SYSTEM PROMPT ─────────────────────────────────────────────────────
+const buildChatSystemPrompt = (language: string, domain: string = "all") => {
+  const lang = language === "hi" ? "Hindi (Shuddh, formal)" : "English";
+  const domainContext = domain !== "all"
+    ? `Focus primarily on ${domain} law aspects in your response.`
+    : "Cover all relevant areas of Indian law including criminal, civil, constitutional, consumer, property, family, and corporate law.";
+
+  return `You are a Senior Indian Legal AI Advisor with deep expertise in:
+- Bharatiya Nyaya Sanhita (BNS) 2023
+- Bharatiya Nagarik Suraksha Sanhita (BNSS) 2023
+- Bharatiya Sakshya Adhiniyam (BSA) 2023
+- Indian Penal Code (IPC) 1860
+- Code of Criminal Procedure (CrPC) 1973
+- Consumer Protection Act 2019
+- Constitution of India
+- Indian Contract Act 1872
+- Transfer of Property Act 1882
+- Hindu Marriage Act, Muslim Personal Law, Special Marriage Act
+- Income Tax Act, GST law
+- Labour laws (Industrial Disputes Act, POSH Act)
+- RTI Act 2005
+
+${domainContext}
+
+RESPONSE LANGUAGE: Reply ONLY in ${lang}.
+
+MANDATORY RESPONSE FORMAT — YOU MUST ALWAYS FOLLOW THIS EXACT STRUCTURE:
+
+## [Topic/Legal Issue Title]
+
+### 📋 Direct Answer
+[2-3 sentences directly answering the question]
+
+### ⚖️ Applicable Law & Sections
+[List every relevant law section with the act name, section number, and a clear explanation. Format:
+- **[Act Name], Section [Number]**: [What this section says and how it applies]]
+
+### 🔍 Detailed Legal Analysis
+[3-5 paragraphs of detailed explanation — cover:
+1. What the law says
+2. How courts have interpreted it (mention landmark judgments if relevant)
+3. What the user's rights/liabilities are
+4. What the burden of proof is, if applicable]
+
+### ✅ Practical Next Steps
+[Numbered list of concrete, actionable steps the user can take immediately]
+
+### 💡 Important Considerations
+[2-3 key caveats, exceptions, or things to watch out for]
+
+RULES:
+- Be comprehensive and detailed — short answers are not acceptable
+- Always cite specific BNS/IPC/Act section numbers
+- Mention landmark Supreme Court judgments when relevant (e.g., Maneka Gandhi v Union of India, K.S. Puttaswamy v Union of India)
+- Use bold formatting for section numbers and key legal terms
+- Write in a professional but accessible tone
+- If a question involves both old law (IPC) and new law (BNS), mention BOTH and explain the difference`;
+};
 
 // ─── Chat stream (used by ChatPage) ───────────────────────────────────────────
 export const chatStream = async (
@@ -61,37 +120,26 @@ export const chatStream = async (
 
   onUpdate("Thinking...");
 
-  const lang = language === "hi" ? "Hindi" : "English";
-  const systemPrompt = `You are a highly knowledgeable Indian Legal AI Assistant specialising in Indian law — IPC, BNS, BNSS, CrPC, consumer law, family law, property law, and constitutional law.
-
-Reply ONLY in ${lang}.
-
-Structure every response with proper Markdown:
-- Begin with a clear **direct answer** to the user's question.
-- Add **relevant laws / sections** (BNS/IPC/other Acts) in a bullet list.
-- End with 2-3 concise **practical next steps** the user can take.
-- Always add a one-line disclaimer at the bottom.
-
-Keep your tone professional but accessible. Never refuse a legal question — if uncertain, provide your best guidance with a caveat.`;
+  const systemPrompt = buildChatSystemPrompt(language);
 
   try {
     const chatCompletion = await groq.chat.completions.create({
       model: MODEL,
-      temperature: 0.2,
-      max_tokens: 1800,
+      temperature: 0.3,
+      max_tokens: 2500,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
     });
 
     const text =
       chatCompletion.choices[0]?.message?.content || "No response generated.";
 
-    // Parse inline citations [BNS 103], [IPC 420], etc.
-    const citationRegex = /\[(BNS|IPC|BNSS|CrPC|BSA)\s*([\w\s,]+?)\]/gi;
+    // Parse inline citations [BNS 103], [IPC 420], [BNSS 41], etc.
+    const citationRegex = /\*\*([A-Z][A-Za-z\s]+(?:Act|Code|Sanhita|Adhiniyam)?),?\s+(?:Section|s\.|Sec\.?)\s*([\d\w,\s]+?)\*\*/gi;
     const citations: Citation[] = [];
     let match: RegExpExecArray | null;
     while ((match = citationRegex.exec(text)) !== null) {
       citations.push({
-        source: match[1].toUpperCase(),
+        source: match[1].trim(),
         section: match[2].trim(),
         text: match[0],
       });
@@ -100,17 +148,17 @@ Keep your tone professional but accessible. Never refuse a legal question — if
     onUpdate(text, citations.length > 0 ? citations : undefined);
   } catch (err: any) {
     console.error("chatStream error:", err);
-    onUpdate(`❌ Error: ${err.message}`);
+    onUpdate(`❌ **Error:** ${err.message}. Please try again.`);
   }
 };
 
 // ─── Generic content generator used by ALL tool pages ─────────────────────────
 export const generateLegalContent = async (
   prompt: string,
-  systemPrompt: string = "You are an expert Indian Legal Assistant. Provide clear, accurate legal guidance based on Indian law."
+  systemPrompt: string = `You are a Senior Indian Legal Expert. Provide detailed, accurate, and professionally structured legal guidance based on Indian law including BNS 2023, BNSS 2023, and all relevant Indian statutes. Always cite specific section numbers. Be comprehensive and thorough.`
 ): Promise<string> => {
   try {
-    return await callGroq(systemPrompt, prompt, 1500);
+    return await callGroq(systemPrompt, prompt, 2000);
   } catch (err: any) {
     console.error("generateLegalContent error:", err);
     return `Error generating content: ${err.message}`;
@@ -187,14 +235,16 @@ export const getLegalNews = async () => {
 
 // ─── Risk Analyzer (used by RiskAnalyzerPage) ────────────────────────────────
 export const riskAnalyzer = async (contractText: string) => {
-  const systemPrompt = `You are an expert Indian contract law analyst. Analyse the provided contract text and identify legal risks.
-Return a valid JSON object in this exact format — nothing else:
+  const systemPrompt = `You are an expert Indian contract law analyst with deep knowledge of Indian Contract Act 1872, Specific Relief Act 1963, and commercial law.
+Analyse the provided contract text and identify ALL legal risks comprehensively.
+Return a valid JSON object in this exact format — nothing else, no markdown wrapper:
 {
   "overall_score": <number 0-100, where 100 = maximum risk>,
   "risks": [
-    { "level": "High|Medium|Low", "description": "<risk description>", "remedy": "<recommended action>" }
+    { "level": "High|Medium|Low", "description": "<specific clause or risk description>", "remedy": "<concrete recommended action or clause amendment>" }
   ]
-}`;
+}
+Identify at least 4-6 distinct risks. Be specific about which clause creates the risk.`;
   const raw = await callGroq(systemPrompt, contractText, 2000);
   return parseModelJson<{ overall_score: number; risks: any[] }>(raw);
 };
@@ -205,15 +255,15 @@ export const compareLegalTexts = async (text1: string, text2: string) => {
 Return a valid JSON object in this exact format — nothing else:
 {
   "change_type": "<Added|Removed|Modified|Unchanged>",
-  "legal_impact": "<explanation of impact>",
-  "penalty_difference": "<how punishment changed>",
-  "key_changes": ["<change 1>", "<change 2>"],
-  "verdict": "<brief summary verdict>"
+  "legal_impact": "<detailed explanation of the legal impact>",
+  "penalty_difference": "<specific how punishment changed, with numbers>",
+  "key_changes": ["<specific change 1>", "<specific change 2>", "<specific change 3>"],
+  "verdict": "<brief authoritative summary verdict>"
 }`;
   const raw = await callGroq(
     systemPrompt,
-    `Compare these two legal texts:\n\nText 1:\n${text1}\n\nText 2:\n${text2}`,
-    1200
+    `Compare these two legal texts:\n\nText 1 (e.g., IPC section):\n${text1}\n\nText 2 (e.g., BNS section):\n${text2}`,
+    1500
   );
   return parseModelJson(raw);
 };

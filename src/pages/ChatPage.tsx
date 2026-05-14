@@ -845,7 +845,7 @@ const ChatPage = () => {
                         </Button>
 
                         {msg.role === 'assistant' ? (
-                          <div className="prose prose-slate max-w-none prose-p:leading-relaxed prose-headings:text-navy-india prose-headings:font-serif prose-headings:font-bold prose-strong:text-saffron prose-a:text-navy-india prose-a:font-bold prose-code:text-saffron prose-code:bg-saffron/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-li:marker:text-saffron">
+                          <div className="prose prose-slate max-w-none prose-p:leading-relaxed prose-p:text-gray-700 prose-headings:text-navy-india prose-headings:font-serif prose-headings:font-bold prose-h2:text-xl prose-h3:text-base prose-h3:mt-5 prose-strong:text-navy-india prose-a:text-navy-india prose-a:font-bold prose-code:text-saffron prose-code:bg-saffron/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-li:marker:text-saffron prose-li:text-gray-700 prose-blockquote:border-saffron prose-blockquote:text-gray-600">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
 
                             {/* Analysis Cards - Only if explicitly provided in structured data (for legacy messages) */}
@@ -892,8 +892,17 @@ const ChatPage = () => {
                               </div>
                             )}
 
-                            <div className="mt-8 pt-4 border-t border-navy-india/5 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                              <div className="flex gap-3">
+                            {/* Always-visible disclaimer */}
+                            <div className="mt-6 pt-4 border-t border-amber-100">
+                              <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                                <svg className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <p className="text-xs text-amber-800 leading-relaxed">
+                                  <strong>⚠️ Legal Disclaimer:</strong> This response is AI-generated for informational purposes only and does not constitute legal advice. Laws may vary by state and individual circumstances differ. Please consult a qualified advocate or legal professional before taking any legal action.
+                                </p>
+                              </div>
+                              <div className="flex gap-3 mt-3">
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -906,9 +915,7 @@ const ChatPage = () => {
                                   variant="ghost"
                                   size="sm"
                                   className="h-8 text-[10px] font-bold uppercase tracking-wider text-navy-india/40 hover:text-navy-india hover:bg-navy-india/5 px-3 rounded-lg"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(msg.content);
-                                  }}
+                                  onClick={() => { navigator.clipboard.writeText(msg.content); toast.success("Copied!"); }}
                                 >
                                   <Copy className="h-3.5 w-3.5 mr-2" /> Copy
                                 </Button>
@@ -925,7 +932,6 @@ const ChatPage = () => {
                                   {isSpeaking === idx ? "Speaking..." : "Listen"}
                                 </Button>
                               </div>
-                              <span className="text-[10px] text-navy-india/20">AI-generated · not legal advice</span>
                             </div>
                           </div>
                         ) : (
