@@ -21,7 +21,7 @@ const HeroSection = () => {
           className="mb-16"
         >
           <div className="flex flex-col items-center gap-3">
-            <div className="flex items-center gap-4 px-6 py-3 rounded-full glass-premium border border-white/40 shadow-2xl group hover:scale-105 transition-all duration-500">
+            <div className="flex items-center gap-4 px-6 py-3 rounded-full glass-premium border border-white/40 shadow-sm group hover:scale-105 transition-all duration-500">
               <div className="flex -space-x-2.5">
                 <div className="w-7 h-7 rounded-full bg-saffron border-2 border-white shadow-sm" />
                 <div className="w-7 h-7 rounded-full bg-white border-2 border-white flex items-center justify-center shadow-sm">
