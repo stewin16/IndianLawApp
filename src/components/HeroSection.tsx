@@ -57,9 +57,9 @@ const HeroSection = () => {
             className="absolute -bottom-20 -right-20 w-48 h-48 bg-green-india/10 rounded-full blur-2xl hidden lg:block"
           />
 
-          <h1 className="editorial-title text-navy-india">
+          <h1 className="editorial-title text-navy-india leading-tight md:leading-normal">
             Legal Clarity <br />
-            <span className="premium-gradient-text italic font-serif font-light tracking-tight">Redefined</span>
+            <span className="premium-gradient-text italic font-serif font-light tracking-tight inline-block py-2 pr-6 mt-4">Redefined</span>
           </h1>
         </motion.div>
 
@@ -120,19 +120,6 @@ const HeroSection = () => {
 
       </div>
 
-      {/* Scroll Animation Container for Demo Screenshot */}
-      <div className="w-full -mt-12 md:-mt-24">
-        <ContainerScroll
-          titleComponent={<></>}
-        >
-          <img
-            src="/demo-screenshot.png"
-            alt="LegalAi Demo Interface"
-            className="mx-auto rounded-2xl object-cover h-full object-left-top shadow-elevated"
-            draggable={false}
-          />
-        </ContainerScroll>
-      </div>
     </div>
   );
 };

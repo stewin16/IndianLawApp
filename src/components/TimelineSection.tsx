@@ -6,34 +6,34 @@ import { CheckCircle2, Check, ArrowRight } from "lucide-react";
 export default function TimelineSection() {
   const data = [
     {
-      title: "The Legacy",
+      title: "Ancient Law",
       content: (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div>
               <p className="text-gray-800 text-sm md:text-base font-normal mb-6 leading-relaxed">
-                For over 160 years, the Indian Penal Code (IPC) served as the cornerstone of criminal justice. However, its colonial roots and fragmented structure became increasingly difficult to navigate in the digital age.
+                The roots of Indian jurisprudence stretch back millennia, guided by the principles of Dharma. Ancient texts like the Arthashastra and Manusmriti formed early frameworks for statecraft, justice, and social conduct.
               </p>
               <div className="flex flex-col gap-4">
                 <div className="flex gap-3 items-start">
                   <span className="mt-1 flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-saffron/20 text-saffron text-xs">x</span>
                   <div>
-                    <span className="block text-sm font-semibold text-gray-900">Colonial Legacy</span>
-                    <span className="text-xs text-gray-500">Statutes designed for a different era, lacking modern context.</span>
+                    <span className="block text-sm font-semibold text-gray-900">Dharma as Justice</span>
+                    <span className="text-xs text-gray-500">Law was intertwined with righteousness and moral duty.</span>
                   </div>
                 </div>
                 <div className="flex gap-3 items-start">
                   <span className="mt-1 flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-saffron/20 text-saffron text-xs">x</span>
                   <div>
-                    <span className="block text-sm font-semibold text-gray-900">Manual Lookup</span>
-                    <span className="text-xs text-gray-500">Lawyers spending hours cross-referencing physical volumes.</span>
+                    <span className="block text-sm font-semibold text-gray-900">The Arthashastra</span>
+                    <span className="text-xs text-gray-500">Chanakya's treatise established early principles of civil and criminal law.</span>
                   </div>
                 </div>
               </div>
             </div>
             <div className="relative">
                <img
-                src="https://images.unsplash.com/photo-1589829085413-56de8ae18c73?q=80&w=2000&auto=format&fit=crop"
-                alt="Old Legal Books"
+                src="/ancient-law.png"
+                alt="Ancient Indian Law"
                 className="rounded-xl object-cover h-64 w-full shadow-2xl border border-gray-200"
               />
             </div>
@@ -41,12 +41,12 @@ export default function TimelineSection() {
       ),
     },
     {
-      title: "The Transition",
+      title: "The Constitution",
       content: (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
              <div>
                <p className="text-gray-800 text-sm md:text-base font-normal mb-6 leading-relaxed">
-                 The introduction of Bharatiya Nyaya Sanhita (BNS) marks a historic shift. LegalAI acts as the bridge, providing instant mapping between legacy IPC and the new Sanhitas.
+                 Adopted in 1950, the Constitution of India is the supreme law of the land. Crafted by the Constituent Assembly under the chairmanship of Dr. B.R. Ambedkar, it establishes a sovereign, socialist, secular, and democratic republic.
                </p>
                <div className="flex flex-col gap-4">
                  <div className="flex gap-3 items-start">
@@ -54,8 +54,8 @@ export default function TimelineSection() {
                      <Check size={12} strokeWidth={3} />
                    </div>
                    <div>
-                     <span className="block text-sm font-semibold text-navy-india">Instant BNS Mapping</span>
-                     <span className="text-xs text-gray-500">Find the equivalent BNS section for any legacy IPC provision.</span>
+                     <span className="block text-sm font-semibold text-navy-india">Fundamental Rights</span>
+                     <span className="text-xs text-gray-500">Guaranteeing equality, freedom, and justice to all citizens.</span>
                    </div>
                  </div>
                  <div className="flex gap-3 items-start">
@@ -63,16 +63,16 @@ export default function TimelineSection() {
                      <Check size={12} strokeWidth={3} />
                    </div>
                    <div>
-                     <span className="block text-sm font-semibold text-navy-india">AI-Powered Synthesis</span>
-                     <span className="text-xs text-gray-500">Advanced AI models synthesize changes, highlighting key legal shifts in real-time.</span>
+                     <span className="block text-sm font-semibold text-navy-india">Longest Written Constitution</span>
+                     <span className="text-xs text-gray-500">A comprehensive document blending global democratic principles.</span>
                    </div>
                  </div>
                </div>
              </div>
              <div className="relative">
                 <img
-                  src="https://images.unsplash.com/photo-1505664194779-8beaceb93744?q=80&w=2000&auto=format&fit=crop"
-                  alt="Modern Justice"
+                  src="/indian-constitution.png"
+                  alt="Constitution of India"
                   className="rounded-xl object-cover h-full min-h-[300px] w-full shadow-2xl border border-gray-200"
                 />
              </div>
@@ -80,21 +80,21 @@ export default function TimelineSection() {
       ),
     },
     {
-      title: "The Future",
+      title: "Digital Era",
       content: (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div>
               <p className="text-gray-800 text-sm md:text-base font-normal mb-6 leading-relaxed">
-                LegalAI v1.0 is just the beginning. We are building a future where legal intelligence is accessible to every Indian citizen, powered by the world's most capable AI.
+                Today, Indian law is entering a new digital frontier. With the new Bharatiya Nyaya Sanhita (BNS) replacing colonial codes and AI tools making legal knowledge universally accessible, justice is evolving for the 21st century.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                   <div className="p-4 rounded-xl bg-white border border-gray-100 shadow-sm">
-                     <h4 className="text-sm font-bold text-navy-india mb-1">24/7 Access</h4>
-                     <p className="text-[10px] text-gray-500 leading-tight">Legal guidance available anytime, anywhere.</p>
+                     <h4 className="text-sm font-bold text-navy-india mb-1">AI Assistance</h4>
+                     <p className="text-[10px] text-gray-500 leading-tight">Instant mapping between legacy IPC and new BNS statutes.</p>
                   </div>
                   <div className="p-4 rounded-xl bg-white border border-gray-100 shadow-sm">
-                     <h4 className="text-sm font-bold text-navy-india mb-1">Bilingual Support</h4>
-                     <p className="text-[10px] text-gray-500 leading-tight">Bridging the language gap in Indian law.</p>
+                     <h4 className="text-sm font-bold text-navy-india mb-1">Empowering Citizens</h4>
+                     <p className="text-[10px] text-gray-500 leading-tight">Bringing constitutional rights and legal awareness to the fingertips of a billion people.</p>
                   </div>
               </div>
             </div>
@@ -122,8 +122,8 @@ export default function TimelineSection() {
       
       <Timeline 
         data={data} 
-        title="The Evolution of Justice"
-        description="Bridging the gap between legacy statutes and the modern Digital India era."
+        title="History of Indian Law"
+        description="From ancient Dharma and the Constitution to the modern Digital India era."
       />
     </div>
   );
