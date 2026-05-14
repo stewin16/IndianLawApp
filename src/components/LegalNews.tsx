@@ -43,7 +43,6 @@ const LegalNews = () => {
             <div className="container max-w-6xl mx-auto">
                 <div className="flex flex-col md:flex-row items-end justify-between mb-12 gap-4">
                     <div className="max-w-2xl">
-                        <span className="micro-label mb-4 block">Real-time Intelligence</span>
                         <h2 className="editorial-heading mb-4">
                             Recent <span className="premium-gradient-text">Legal Updates</span>
                         </h2>
