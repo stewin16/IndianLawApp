@@ -58,6 +58,14 @@ const INDIAN_CITIES = [
     { name: "Pune", lat: 18.5204, lon: 73.8567 },
     { name: "Jaipur", lat: 26.9124, lon: 75.7873 },
     { name: "Lucknow", lat: 26.8467, lon: 80.9461 },
+    { name: "Chandigarh", lat: 30.7333, lon: 76.7794 },
+    { name: "Bhopal", lat: 23.2599, lon: 77.4126 },
+    { name: "Patna", lat: 25.5941, lon: 85.1376 },
+    { name: "Bhubaneswar", lat: 20.2961, lon: 85.8245 },
+    { name: "Kochi", lat: 9.9312, lon: 76.2673 },
+    { name: "Nagpur", lat: 21.1458, lon: 79.0882 },
+    { name: "Indore", lat: 22.7196, lon: 75.8577 },
+    { name: "Surat", lat: 21.1702, lon: 72.8311 },
 ];
 
 const generateDemoLawyers = (lat: number, lon: number, radius: number): Lawyer[] => {
@@ -550,38 +558,61 @@ const LawyerFinderPage = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: index * 0.05 }}
                                         onClick={() => setSelectedLawyer(lawyer)}
-                                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer bg-white/80 backdrop-blur-sm ${selectedLawyer?.id === lawyer.id
-                                            ? 'border-navy-india shadow-md ring-1 ring-navy-india/10'
-                                            : 'border-gray-100 hover:border-gray-200'
+                                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer bg-white/90 backdrop-blur-sm ${
+                                            selectedLawyer?.id === lawyer.id
+                                                ? 'border-navy-india shadow-lg ring-1 ring-navy-india/10'
+                                                : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
                                             }`}
                                     >
                                         <div className="flex justify-between items-start mb-2">
-                                            <h3 className="font-bold text-gray-900 line-clamp-1">{lawyer.name}</h3>
-                                            <Badge variant={lawyer.openNow ? "default" : "secondary"} className={lawyer.openNow ? "bg-green-100 text-green-700 hover:bg-green-100" : ""}>
-                                                {lawyer.openNow ? "Open" : "Closed"}
+                                            <h3 className="font-bold text-gray-900 line-clamp-1 text-sm">{lawyer.name}</h3>
+                                            <Badge variant={lawyer.openNow ? "default" : "secondary"} className={`shrink-0 ml-2 text-[10px] ${lawyer.openNow ? "bg-green-100 text-green-700 hover:bg-green-100 border-green-200" : "bg-gray-100 text-gray-500"}`}>
+                                                {lawyer.openNow ? "● Open" : "Closed"}
                                             </Badge>
                                         </div>
 
-                                        <div className="flex items-center gap-2 mb-2 text-sm text-gray-600">
-                                            <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                                            <span className="font-semibold text-gray-900">{lawyer.rating?.toFixed(1)}</span>
-                                            <span className="text-gray-400">({lawyer.reviewCount})</span>
-                                            <span className="text-gray-300">|</span>
-                                            <span>{lawyer.specialization}</span>
+                                        <div className="flex items-center gap-2 mb-2 text-xs text-gray-600">
+                                            <div className="flex items-center gap-1">
+                                                {[1,2,3,4,5].map(s => (
+                                                    <Star key={s} className={`w-3 h-3 ${s <= Math.round(lawyer.rating || 0) ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'}`} />
+                                                ))}
+                                            </div>
+                                            <span className="font-bold text-gray-900">{lawyer.rating?.toFixed(1)}</span>
+                                            <span className="text-gray-400">({lawyer.reviewCount} reviews)</span>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-1.5 mb-2">
+                                            <span className="px-2 py-0.5 bg-navy-india/5 text-navy-india rounded-full text-[10px] font-bold">{lawyer.specialization}</span>
+                                            <span className="px-2 py-0.5 bg-saffron/10 text-saffron rounded-full text-[10px] font-bold">{lawyer.experience}</span>
+                                            {lawyer.distance && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[10px] font-bold">{lawyer.distance.toFixed(1)} km away</span>}
                                         </div>
 
                                         <p className="text-xs text-gray-500 mb-3 flex items-start gap-1">
-                                            <MapPin className="w-3 h-3 mt-0.5" />
+                                            <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
                                             {lawyer.address}
                                         </p>
 
                                         <div className="flex gap-2">
-                                            <Button size="sm" variant="outline" className="flex-1 h-8 text-xs">
-                                                Call
-                                            </Button>
-                                            <Button size="sm" className="flex-1 h-8 text-xs bg-navy-india/10 text-navy-india hover:bg-navy-india hover:text-white border-0">
-                                                Directions
-                                            </Button>
+                                            <a
+                                                href={lawyer.phone ? `tel:${lawyer.phone.replace(/\s/g, '')}` : '#'}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className={`flex-1 flex items-center justify-center gap-1.5 h-8 text-xs font-medium rounded-lg border transition-all ${
+                                                    lawyer.phone
+                                                        ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                                                        : 'border-gray-200 text-gray-400 cursor-not-allowed'
+                                                }`}
+                                            >
+                                                <Phone className="w-3 h-3" /> {lawyer.phone ? "Call" : "No Phone"}
+                                            </a>
+                                            <a
+                                                href={`https://www.google.com/maps/dir/?api=1&destination=${lawyer.lat},${lawyer.lon}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="flex-1 flex items-center justify-center gap-1.5 h-8 text-xs font-medium rounded-lg bg-navy-india/5 text-navy-india hover:bg-navy-india hover:text-white border-0 transition-all"
+                                            >
+                                                <Navigation className="w-3 h-3" /> Directions
+                                            </a>
                                         </div>
                                     </motion.div>
                                 ))
@@ -589,12 +620,30 @@ const LawyerFinderPage = () => {
                                 hasSearched && !isLoading && (
                                     <div className="text-center py-10 bg-white/50 rounded-xl border border-dashed border-gray-300">
                                         <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                                        <p className="text-gray-500">No lawyers found matching your filters.</p>
+                                        <p className="text-gray-500 text-sm">No lawyers found matching your filters.</p>
                                         <Button variant="link" onClick={() => { setSearchQuery(""); setSpecialization("all"); }} className="text-navy-india">
                                             Clear Filters
                                         </Button>
                                     </div>
                                 )
+                            )}
+
+                            {/* NALSA Free Legal Aid Card */}
+                            {(hasSearched || lawyers.length === 0) && (
+                                <div className="mt-4 p-4 rounded-xl border-2 border-dashed border-green-200 bg-green-50/50">
+                                    <p className="text-xs font-bold text-green-700 mb-1">🆓 Need Free Legal Aid?</p>
+                                    <p className="text-xs text-green-600 mb-3">NALSA provides free legal services to eligible citizens under the Legal Services Authorities Act.</p>
+                                    <div className="flex gap-2">
+                                        <a href="https://nalsa.gov.in" target="_blank" rel="noopener noreferrer"
+                                            className="flex-1 flex items-center justify-center gap-1 h-8 text-xs font-bold rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors">
+                                            <ExternalLink className="w-3 h-3" /> NALSA Website
+                                        </a>
+                                        <a href="tel:15100"
+                                            className="flex-1 flex items-center justify-center gap-1 h-8 text-xs font-bold rounded-lg border border-green-300 text-green-700 hover:bg-green-100 transition-colors">
+                                            <Phone className="w-3 h-3" /> Helpline 15100
+                                        </a>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -632,34 +681,80 @@ const LawyerFinderPage = () => {
                                     initial={{ opacity: 0, y: 50 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: 50 }}
-                                    className="absolute bottom-6 left-6 right-6 bg-white/95 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-gray-100 md:max-w-md md:left-auto"
+                                    className="absolute bottom-6 left-6 right-6 bg-white/98 backdrop-blur-md p-6 rounded-2xl shadow-2xl border border-gray-100 md:max-w-md md:left-auto"
                                 >
                                     <button
                                         onClick={() => setSelectedLawyer(null)}
-                                        className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-full text-gray-400"
+                                        className="absolute top-3 right-3 p-1.5 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
                                     >
-                                        ×
+                                        ✕
                                     </button>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedLawyer.name}</h3>
-                                    <p className="text-navy-india font-medium text-sm mb-3">{selectedLawyer.specialization}</p>
 
-                                    <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                                        <div className="bg-gray-50 p-2 rounded-lg">
-                                            <p className="text-gray-500 text-xs uppercase tracking-wider">Rating</p>
-                                            <p className="font-semibold flex items-center gap-1">
+                                    <div className="flex items-start gap-3 mb-4">
+                                        <div className="w-12 h-12 rounded-xl bg-navy-india/5 flex items-center justify-center shrink-0">
+                                            <Gavel className="w-6 h-6 text-navy-india" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900 leading-tight">{selectedLawyer.name}</h3>
+                                            <p className="text-navy-india font-semibold text-sm">{selectedLawyer.specialization}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-3 mb-4">
+                                        <div className="bg-gray-50 p-2 rounded-xl text-center">
+                                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Rating</p>
+                                            <p className="font-bold text-gray-900 flex items-center justify-center gap-1">
                                                 {selectedLawyer.rating?.toFixed(1)} <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
                                             </p>
                                         </div>
-                                        <div className="bg-gray-50 p-2 rounded-lg">
-                                            <p className="text-gray-500 text-xs uppercase tracking-wider">Distance</p>
-                                            <p className="font-semibold">{selectedLawyer.distance?.toFixed(1)} km</p>
+                                        <div className="bg-gray-50 p-2 rounded-xl text-center">
+                                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Distance</p>
+                                            <p className="font-bold text-gray-900">{selectedLawyer.distance?.toFixed(1)} km</p>
+                                        </div>
+                                        <div className="bg-gray-50 p-2 rounded-xl text-center">
+                                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Experience</p>
+                                            <p className="font-bold text-gray-900 text-xs">{selectedLawyer.experience}</p>
                                         </div>
                                     </div>
 
+                                    {selectedLawyer.address && (
+                                        <div className="flex items-start gap-2 text-xs text-gray-600 mb-3">
+                                            <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
+                                            {selectedLawyer.address}
+                                        </div>
+                                    )}
+
                                     <div className="flex gap-3">
-                                        <Button className="flex-1 bg-green-600 hover:bg-green-700">Call Now</Button>
-                                        <Button variant="outline" className="flex-1 border-navy-india text-navy-india">Directions</Button>
+                                        <a
+                                            href={selectedLawyer.phone ? `tel:${selectedLawyer.phone.replace(/\s/g, '')}` : '#'}
+                                            className={`flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-sm transition-all ${
+                                                selectedLawyer.phone
+                                                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                                                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                        >
+                                            <Phone className="w-4 h-4" /> {selectedLawyer.phone || "No Phone"}
+                                        </a>
+                                        <a
+                                            href={`https://www.google.com/maps/dir/?api=1&destination=${selectedLawyer.lat},${selectedLawyer.lon}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-sm border-2 border-navy-india text-navy-india hover:bg-navy-india hover:text-white transition-all"
+                                        >
+                                            <Navigation className="w-4 h-4" /> Directions
+                                        </a>
                                     </div>
+
+                                    {selectedLawyer.website && (
+                                        <a
+                                            href={selectedLawyer.website}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="mt-2 flex items-center justify-center gap-2 w-full h-9 rounded-xl border border-gray-200 text-xs text-gray-600 hover:border-saffron hover:text-saffron transition-all"
+                                        >
+                                            <Globe className="w-3.5 h-3.5" /> Visit Website
+                                        </a>
+                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>

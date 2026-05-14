@@ -41,6 +41,44 @@ async function callGroq(
   return res.choices[0]?.message?.content?.trim() || "No response generated.";
 }
 
+// ─── Tool route map — used by AI to suggest tools ─────────────────────────────
+export const TOOL_ROUTES: Record<string, { label: string; path: string; emoji: string; description: string }> = {
+  drafter: { label: "Document Drafter", path: "/draft", emoji: "📄", description: "Draft rental agreements, legal notices, NDAs, affidavits, court memorials & more" },
+  fir: { label: "FIR Generator", path: "/tools/fir-generator", emoji: "🚨", description: "Generate a properly formatted FIR complaint draft" },
+  bail: { label: "Bail Checker", path: "/tools/bail-checker", emoji: "🔓", description: "Check bail eligibility under BNS 2023 & BNSS 2023" },
+  consumer: { label: "Consumer Complaint", path: "/tools/consumer-complaint", emoji: "🛒", description: "Draft a consumer grievance under Consumer Protection Act 2019" },
+  risk: { label: "Risk Analyzer", path: "/tools/risk-analyzer", emoji: "🛡️", description: "Analyze contracts and agreements for legal risks" },
+  section: { label: "Section Finder", path: "/tools/section-finder", emoji: "🔍", description: "Find applicable IPC/BNS sections for any offense" },
+  rti: { label: "RTI Application", path: "/tools/rti-generator", emoji: "📋", description: "Generate an RTI application to any government department" },
+  case: { label: "Case Predictor", path: "/tools/case-predictor", emoji: "⚖️", description: "Predict likely case outcome based on facts" },
+  property: { label: "Property Verifier", path: "/tools/property-verifier", emoji: "🏠", description: "Verify property documents and check legal status" },
+  lawyer: { label: "Find a Lawyer", path: "/tools/lawyer-finder", emoji: "👨‍⚖️", description: "Find lawyers near you on a live map" },
+  labor: { label: "Labour Advisor", path: "/tools/labor-advisor", emoji: "👷", description: "Know your rights under Indian labour laws" },
+  divorce: { label: "Divorce Guide", path: "/tools/divorce-guide", emoji: "💔", description: "Navigate divorce proceedings under Indian family law" },
+  cyber: { label: "Cyber Crime Reporter", path: "/tools/cyber-crime-reporter", emoji: "💻", description: "Report cyber crimes and know your digital rights" },
+  cost: { label: "Legal Cost Estimator", path: "/tools/legal-cost-estimator", emoji: "💰", description: "Estimate legal fees and court costs for your case" },
+};
+
+// ─── Detect if the user's message needs a tool ────────────────────────────────
+export const detectToolIntent = (userMessage: string): string | null => {
+  const m = userMessage.toLowerCase();
+  if (/(draft|write|create|prepare|make|generate).*(document|agreement|contract|notice|affidavit|memorial|nda|rent|lease|will|deed|letter)/i.test(m)) return "drafter";
+  if (/(fir|first information report|police complaint|file.*(police|complaint))/i.test(m)) return "fir";
+  if (/(bail|bailable|non.?bailable|get bail|apply for bail)/i.test(m)) return "bail";
+  if (/(consumer|refund|defective product|amazon|flipkart|complaint.*(seller|shop|company))/i.test(m)) return "consumer";
+  if (/(analyze|analyse|check|review).*(contract|agreement|clause)/i.test(m)) return "risk";
+  if (/(which section|what section|find section|applicable section|ipc|bns section for)/i.test(m)) return "section";
+  if (/\brti\b|right to information|government information/i.test(m)) return "rti";
+  if (/(predict|outcome|chance|win|lose|success).*(case|court|suit)/i.test(m)) return "case";
+  if (/(property|land|flat|house).*(verify|check|legal|title|encumbrance)/i.test(m)) return "property";
+  if (/(find|need|want|looking for|hire|consult).*(lawyer|advocate|attorney|legal help)/i.test(m)) return "lawyer";
+  if (/(labour|labor|employee|employer|salary|pf|esic|termination|wrongful dismissal)/i.test(m)) return "labor";
+  if (/(divorce|separation|alimony|maintenance|matrimonial)/i.test(m)) return "divorce";
+  if (/(cyber|hacking|online fraud|data breach|social media|digital)/i.test(m)) return "cyber";
+  if (/(cost|fee|charge|how much|legal.*(expense|cost))/i.test(m)) return "cost";
+  return null;
+};
+
 // ─── MASTER SYSTEM PROMPT ─────────────────────────────────────────────────────
 const buildChatSystemPrompt = (language: string, domain: string = "all") => {
   const lang = language === "hi" ? "Hindi (Shuddh, formal)" : "English";

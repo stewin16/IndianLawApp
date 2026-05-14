@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Scale, Zap, BookOpen, Mic, MicOff, Download, Sparkles, Send, Menu, Plus, Trash2, MessageSquare, ExternalLink, Copy, Check, Volume2, Search, X, ChevronRight, ArrowRight } from "lucide-react";
+import { Loader2, Scale, Zap, BookOpen, Mic, MicOff, Download, Sparkles, Send, Menu, Plus, Trash2, MessageSquare, ExternalLink, Copy, Volume2, Search, ChevronRight, ArrowRight } from "lucide-react";
 import Header from "@/components/Header";
 import TricolorBackground from "@/components/TricolorBackground";
 import ReactMarkdown from "react-markdown";
@@ -13,9 +13,10 @@ import remarkGfm from "remark-gfm";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "@/lib/translations";
-import { chatStream } from "@/services/groqService";
+import { chatStream, detectToolIntent, TOOL_ROUTES } from "@/services/groqService";
 import { toast } from "sonner";
 import { exportStructuredPdf, toPlainText } from "@/lib/pdfExport";
+import { Link } from "react-router-dom";
 
 interface Judgment {
   title: string;
@@ -45,6 +46,7 @@ interface Message {
   arguments?: Arguments;
   neutral_analysis?: NeutralAnalysis;
   citations?: Citation[];
+  toolSuggestion?: string | null; // key into TOOL_ROUTES
 }
 
 const NON_LEGAL_INTENT_PATTERNS = [
@@ -393,12 +395,20 @@ const ChatPage = () => {
         content: m.content
       }));
 
+      // Detect if the message needs a tool and inject into assistant message
+      const toolKey = detectToolIntent(text);
+
       await chatStream(
         history,
         (content, citations) => {
           setMessages(prev => {
             const newMsgs = [...prev];
-            newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content, citations };
+            newMsgs[newMsgs.length - 1] = { 
+              ...newMsgs[newMsgs.length - 1], 
+              content, 
+              citations,
+              toolSuggestion: toolKey,
+            };
             return newMsgs;
           });
         },
@@ -938,6 +948,40 @@ const ChatPage = () => {
                           <p className="font-medium">{msg.content}</p>
                         )}
                       </div>
+
+                      {/* Tool Suggestion Card — shown when user query maps to a tool */}
+                      {msg.role === 'assistant' && msg.toolSuggestion && TOOL_ROUTES[msg.toolSuggestion] && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.97 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ delay: 0.3 }}
+                          className="mt-4"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="h-px flex-1 bg-navy-india/5" />
+                            <span className="text-[10px] font-mono font-bold text-navy-india/30 uppercase tracking-widest">Suggested Tool</span>
+                            <div className="h-px flex-1 bg-navy-india/5" />
+                          </div>
+                          <Link to={TOOL_ROUTES[msg.toolSuggestion].path}>
+                            <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-saffron/5 to-navy-india/5 border border-saffron/20 rounded-2xl hover:border-saffron/50 hover:shadow-lg hover:shadow-saffron/10 transition-all group cursor-pointer">
+                              <div className="w-12 h-12 rounded-xl bg-white border border-saffron/20 flex items-center justify-center text-2xl shrink-0 shadow-sm">
+                                {TOOL_ROUTES[msg.toolSuggestion].emoji}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-navy-india text-sm group-hover:text-saffron transition-colors">
+                                  {TOOL_ROUTES[msg.toolSuggestion].label}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
+                                  {TOOL_ROUTES[msg.toolSuggestion].description}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 text-saffron font-bold text-xs shrink-0">
+                                Open Tool <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                              </div>
+                            </div>
+                          </Link>
+                        </motion.div>
+                      )}
 
                       {/* Suggested Questions - Only for the last assistant message */}
                       {idx === messages.length - 1 && msg.role === 'assistant' && suggestedQuestions.length > 0 && (
