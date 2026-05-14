@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![LegalAI Logo](https://raw.githubusercontent.com/stewin16/LegalAI/main/public/logo.jpg)
+<img src="public/logo.jpg" width="120" alt="LegalAI Logo" />
 
 **Access 20+ AI-powered legal tools for Indian law, optimized for BNS 2023 & BNSS 2023.**
 
