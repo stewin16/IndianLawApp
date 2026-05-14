@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "./ui/button";
-import { ArrowRight, CheckCircle2, Zap, ChevronDown } from "lucide-react";
+import { ArrowRight, CheckCircle2, Zap } from "lucide-react";
 
 const HeroSection = () => {
   return (
-    <div className="relative flex flex-col items-center justify-start overflow-visible bg-gradient-hero pt-4 md:pt-8 pb-0">
+    <div className="relative flex flex-col items-center justify-start overflow-visible bg-gradient-hero pt-4 md:pt-8 pb-20">
       {/* Background Gradients - Enhanced tricolor glows */}
       <div className="absolute top-0 left-1/4 w-[700px] h-[500px] bg-saffron/12 rounded-full blur-[140px] opacity-60 pointer-events-none" />
       <div className="absolute bottom-20 right-1/4 w-[600px] h-[600px] bg-green-india/10 rounded-full blur-[120px] opacity-50 pointer-events-none" />
@@ -118,30 +118,6 @@ const HeroSection = () => {
         </motion.div>
 
       </div>
-      {/* Floating Scroll Down Arrow */}
-      <motion.div
-        className="flex justify-center pb-8 pt-4"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2, duration: 0.8 }}
-      >
-        <motion.button
-          onClick={() => {
-            const next = document.querySelector('section');
-            if (next) next.scrollIntoView({ behavior: 'smooth' });
-            else window.scrollBy({ top: window.innerHeight * 0.9, behavior: 'smooth' });
-          }}
-          animate={{ y: [0, 10, 0] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-          className="flex flex-col items-center gap-1 text-navy-india/40 hover:text-saffron transition-colors group cursor-pointer"
-          aria-label="Scroll down"
-        >
-          <span className="text-[10px] font-mono uppercase tracking-widest font-bold opacity-60 group-hover:opacity-100 transition-opacity">Scroll</span>
-          <ChevronDown className="w-7 h-7 drop-shadow-sm" strokeWidth={1.5} />
-          <ChevronDown className="w-5 h-5 -mt-4 opacity-40" strokeWidth={1.5} />
-        </motion.button>
-      </motion.div>
-
     </div>
   );
 };
