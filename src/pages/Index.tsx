@@ -11,7 +11,7 @@ import TricolorBackground from "@/components/TricolorBackground";
 import Footer from "@/components/Footer";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 const Index = () => {
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -54,7 +54,7 @@ const Index = () => {
       </main>
       <Footer />
 
-      {/* ── Persistent Scroll Indicator Overlay ── */}
+      {/* ── Persistent Scroll Overlay ── */}
       <AnimatePresence>
         {showScrollBtn && (
           <motion.div
@@ -64,20 +64,36 @@ const Index = () => {
             transition={{ duration: 0.4 }}
             className="fixed right-6 bottom-8 z-50 flex flex-col items-center gap-2"
           >
-            {/* Scroll progress bar */}
-            <div className="w-0.5 h-20 bg-navy-india/10 rounded-full overflow-hidden relative">
+            {/* Scroll to Top — only shows after scrolling down 300px */}
+            <AnimatePresence>
+              {scrollProgress > 0.05 && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                  className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md border border-saffron/20 shadow-lg flex items-center justify-center text-navy-india hover:bg-saffron hover:text-white hover:border-saffron transition-all duration-300"
+                  aria-label="Scroll to top"
+                >
+                  <ChevronUp className="w-5 h-5" strokeWidth={2} />
+                </motion.button>
+              )}
+            </AnimatePresence>
+
+            {/* Progress bar */}
+            <div className="w-0.5 h-16 bg-navy-india/10 rounded-full overflow-hidden relative">
               <motion.div
                 className="absolute top-0 left-0 w-full rounded-full bg-gradient-to-b from-saffron to-green-india"
                 style={{ height: `${scrollProgress * 100}%` }}
               />
             </div>
 
-            {/* Bouncing chevron button */}
+            {/* Scroll Down — bouncing */}
             <motion.button
               onClick={handleScrollDown}
-              animate={{ y: [0, 8, 0] }}
+              animate={{ y: [0, 6, 0] }}
               transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-              className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md border border-saffron/20 shadow-lg flex flex-col items-center justify-center text-navy-india hover:bg-saffron hover:text-white hover:border-saffron transition-all duration-300 group"
+              className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md border border-saffron/20 shadow-lg flex items-center justify-center text-navy-india hover:bg-saffron hover:text-white hover:border-saffron transition-all duration-300"
               aria-label="Scroll down"
             >
               <ChevronDown className="w-5 h-5" strokeWidth={2} />
@@ -85,6 +101,7 @@ const Index = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 };
