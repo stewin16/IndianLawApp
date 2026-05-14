@@ -18,7 +18,7 @@ const HeroSection = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-8"
+          className="mb-16"
         >
           <div className="flex flex-col items-center gap-3">
             <div className="flex items-center gap-4 px-6 py-3 rounded-full glass-premium border border-white/40 shadow-2xl group hover:scale-105 transition-all duration-500">
