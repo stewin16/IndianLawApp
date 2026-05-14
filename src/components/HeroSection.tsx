@@ -57,9 +57,9 @@ const HeroSection = () => {
             className="absolute -bottom-20 -right-20 w-48 h-48 bg-green-india/10 rounded-full blur-2xl hidden lg:block"
           />
 
-          <h1 className="editorial-title text-navy-india leading-tight md:leading-normal">
+          <h1 className="editorial-title text-navy-india">
             Legal Clarity <br />
-            <span className="premium-gradient-text italic font-serif font-light tracking-tight inline-block py-2 pr-6 mt-4">Redefined</span>
+            <span className="premium-gradient-text italic font-serif font-light tracking-tight inline-block pr-6 pb-2 -mt-4">Redefined</span>
           </h1>
         </motion.div>
 
