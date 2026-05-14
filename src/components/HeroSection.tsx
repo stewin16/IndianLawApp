@@ -18,7 +18,7 @@ const HeroSection = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-6"
+          className="mb-10"
         >
           <div className="flex flex-col items-center gap-3">
             <div className="flex items-center gap-4 px-6 py-3 rounded-full glass-premium border border-white/40 shadow-sm group hover:scale-105 transition-all duration-500">
@@ -42,7 +42,7 @@ const HeroSection = () => {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          className="relative mb-4"
+          className="relative mb-8"
         >
           {/* Floating Accents */}
           <motion.div
@@ -58,7 +58,7 @@ const HeroSection = () => {
 
           <h1 className="editorial-title text-navy-india">
             Legal Clarity <br />
-            <span className="premium-gradient-text italic font-serif font-light tracking-tight inline-block pr-6 pb-4 pt-2 -mt-4">Redefined</span>
+            <span className="premium-gradient-text italic font-serif font-light tracking-tight inline-block pr-8 pb-6 pt-2 -mt-4">Redefined</span>
           </h1>
         </motion.div>
 
@@ -67,7 +67,7 @@ const HeroSection = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          className="editorial-subtitle max-w-4xl mx-auto mb-8"
+          className="editorial-subtitle max-w-4xl mx-auto mb-12"
         >
           The most advanced AI assistant for Indian Law. Compare statutes, analyze case laws, and get criminal justice insights{' '}
           <span className="text-navy-india font-semibold border-b-4 border-saffron/30 pb-1">instantly</span>.
