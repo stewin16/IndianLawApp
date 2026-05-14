@@ -153,7 +153,7 @@
 
   .editorial-title {
     font-family: 'Playfair Display', serif;
-    font-size: clamp(4rem, 13vw, 10rem);
+    font-size: clamp(3rem, 7vw, 5.5rem);
     line-height: 1.1;
     font-weight: 700;
     letter-spacing: -0.05em;
@@ -161,7 +161,7 @@
 
   .editorial-subtitle {
     font-family: 'Playfair Display', serif;
-    font-size: clamp(1.25rem, 3vw, 2.5rem);
+    font-size: clamp(1.125rem, 2vw, 1.75rem);
     line-height: 1.1;
     font-weight: 400;
     font-style: italic;
