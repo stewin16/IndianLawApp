@@ -1,11 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Download, Languages, FileText, PenTool, Loader2, Maximize2, X, Sparkles, ArrowLeft, Copy, Zap, ShieldCheck, FileSignature, Settings2 } from 'lucide-react';
+import { Download, Languages, FileText, PenTool, Loader2, Maximize2, Sparkles, ArrowLeft, Copy, Zap, ShieldCheck, FileSignature, Settings2, Wand2, RefreshCw } from 'lucide-react';
 import Header from "@/components/Header";
 import TricolorBackground from "@/components/TricolorBackground";
 import Footer from "@/components/Footer";
@@ -14,6 +14,117 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { generateLegalContent } from "@/services/groqService";
 import { exportStructuredPdf, toPlainText } from "@/lib/pdfExport";
+import SmartWizard, { WizardStep } from "@/components/SmartWizard";
+
+// ─── Wizard steps for Guided Drafting ─────────────────────────────────────────
+const DRAFT_WIZARD_STEPS: WizardStep[] = [
+    {
+        title: "Document Type",
+        subtitle: "What do you need to draft?",
+        icon: "📄",
+        fields: [
+            {
+                key: "docType",
+                label: "Type of Document",
+                type: "chips",
+                chips: ["Rental Agreement", "Legal Notice", "NDA", "Affidavit", "Employment Contract", "Court Memorial", "Will / Testament", "Sale Agreement", "Partnership Deed", "Power of Attorney"],
+                placeholder: "Or describe the document type...",
+                required: true,
+            },
+            {
+                key: "language",
+                label: "Preferred Language",
+                type: "select",
+                options: [
+                    { value: "English", label: "English" },
+                    { value: "Hindi", label: "Hindi (Shuddh)" },
+                ],
+            },
+        ],
+    },
+    {
+        title: "The Parties",
+        subtitle: "Who are the parties involved?",
+        icon: "👥",
+        fields: [
+            {
+                key: "partyA",
+                label: "Party A (Name, Role & Address)",
+                type: "textarea",
+                placeholder: "e.g., Ramesh Kumar, Landlord, 123 MG Road, Mumbai - 400001",
+                required: true,
+            },
+            {
+                key: "partyB",
+                label: "Party B (Name, Role & Address)",
+                type: "textarea",
+                placeholder: "e.g., Priya Sharma, Tenant, 456 Link Road, Mumbai - 400050",
+                required: true,
+            },
+            {
+                key: "additionalParties",
+                label: "Additional Parties (if any)",
+                type: "text",
+                placeholder: "e.g., Guarantor, Witness, Third Party",
+            },
+        ],
+    },
+    {
+        title: "Key Terms",
+        subtitle: "What are the main terms and conditions?",
+        icon: "📋",
+        fields: [
+            {
+                key: "keyTerms",
+                label: "Core Terms & Conditions",
+                type: "textarea",
+                placeholder: `Describe the main terms, e.g.:
+• Rent: ₹25,000/month, payable by 5th of each month
+• Duration: 11 months from 1st June 2025
+• Security Deposit: ₹50,000 (refundable)
+• Notice period: 1 month by either party`,
+                required: true,
+                minLength: 30,
+                hint: "The more specific you are, the more accurate and professional the document will be.",
+            },
+            {
+                key: "specialClauses",
+                label: "Special / Additional Clauses",
+                type: "textarea",
+                placeholder: "e.g., No subletting, Pets not allowed, Maintenance responsibilities, Specific payment penalties...",
+            },
+        ],
+    },
+    {
+        title: "Jurisdiction & Date",
+        subtitle: "Legal context for the document",
+        icon: "🏛️",
+        fields: [
+            {
+                key: "jurisdiction",
+                label: "Jurisdiction / State",
+                type: "text",
+                placeholder: "e.g., Maharashtra, Karnataka, Delhi",
+                required: true,
+            },
+            {
+                key: "executionDate",
+                label: "Date of Execution",
+                type: "date",
+            },
+            {
+                key: "stampDuty",
+                label: "Stamp Duty / Notarisation Required?",
+                type: "select",
+                options: [
+                    { value: "yes_stamp", label: "Yes — include stamp duty clause" },
+                    { value: "yes_notarised", label: "Yes — to be notarised" },
+                    { value: "no", label: "No — simple signed agreement" },
+                ],
+            },
+        ],
+    },
+];
 
 const exampleScenarios: Record<string, string> = {
     legal_notice: "Sender: Ramesh Kumar, 123 MG Road, Mumbai.\nRecipient: Suresh Patel, 456 Link Road, Mumbai.\nIssue: Non-repair of rented property despite multiple reminders.\nDemand: Repair damages worth Rs. 50,000 within 15 days or face legal action.",
@@ -32,6 +143,51 @@ const DraftingPage = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedDraft, setGeneratedDraft] = useState<string>("");
     const [isFocusMode, setIsFocusMode] = useState(false);
+    const [wizardMode, setWizardMode] = useState(true); // default to guided wizard
+
+    // ── Wizard handler ──────────────────────────────────────────────────────
+    const handleWizardComplete = async (data: Record<string, string>) => {
+        setIsGenerating(true);
+        setGeneratedDraft("");
+        setWizardMode(false); // switch to editor view
+        try {
+            const systemPrompt = `You are an expert Indian Legal Draftsman with 20+ years of experience.
+Draft a professional, complete, legally-sound ${data.docType || "legal document"} in ${data.language || "English"}.
+Use proper legal terminology, numbered clauses, formal structure.
+Ensure compliance with relevant Indian laws (BNS 2023, BNSS 2023, specific state laws of ${data.jurisdiction || "India"}).
+Include all necessary clauses, recitals, and schedules for this type of document.
+Add signature lines, date lines, and witness fields at the end.
+If HINDI is selected, use formal Shuddh Hindi legal language.`;
+
+            const prompt = `Draft a ${data.docType}:
+
+PARTIES:
+Party A: ${data.partyA}
+Party B: ${data.partyB}
+${data.additionalParties ? `Additional Parties: ${data.additionalParties}` : ""}
+
+KEY TERMS:
+${data.keyTerms}
+
+${data.specialClauses ? `SPECIAL CLAUSES:
+${data.specialClauses}` : ""}
+
+JURISDICTION: ${data.jurisdiction}
+EXECUTION DATE: ${data.executionDate || "[Date of signing]"}
+STAMP DUTY: ${data.stampDuty || "As applicable"}
+
+Generate the complete, final document with all proper legal clauses.`;
+
+            const result = await generateLegalContent(prompt, systemPrompt);
+            setGeneratedDraft(result);
+            toast.success("Professional draft generated!");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Drafting Failed: ${message}`);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     const handleGenerate = async () => {
         if (!details.trim()) {
@@ -152,26 +308,125 @@ const DraftingPage = () => {
                 isFocusMode ? "opacity-0" : "pt-8 pb-24 max-w-7xl"
             )}>
 
+
                 {/* Hero Header */}
                 <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col items-center justify-center text-center mb-16"
+                    className="flex flex-col items-center justify-center text-center mb-10"
                 >
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-saffron/10 border border-saffron/20 text-saffron text-[10px] font-bold uppercase tracking-[0.2em] mb-6">
                         <Zap className="w-3 h-3" />
                         AI Drafting Engine
                     </div>
-                    <h1 className="editorial-title mb-6">
+                    <h1 className="editorial-title mb-4">
                         Legal <span className="premium-gradient-text">Drafter</span>
                     </h1>
-                    <p className="editorial-subtitle max-w-2xl">
+                    <p className="editorial-subtitle max-w-2xl mb-8">
                         Generate precise, professional legal documents in seconds. 
                         Tailored for Indian Law and compliance standards with AI-driven accuracy.
                     </p>
+
+                    {/* Mode Switcher */}
+                    <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl">
+                        <button
+                            onClick={() => { setWizardMode(true); setGeneratedDraft(""); }}
+                            className={cn(
+                                "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all",
+                                wizardMode
+                                    ? "bg-white text-saffron shadow-md"
+                                    : "text-gray-500 hover:text-gray-700"
+                            )}
+                        >
+                            <Wand2 className="w-4 h-4" />
+                            Guided Wizard
+                        </button>
+                        <button
+                            onClick={() => setWizardMode(false)}
+                            className={cn(
+                                "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all",
+                                !wizardMode
+                                    ? "bg-white text-saffron shadow-md"
+                                    : "text-gray-500 hover:text-gray-700"
+                            )}
+                        >
+                            <Settings2 className="w-4 h-4" />
+                            Quick Draft
+                        </button>
+                    </div>
                 </motion.div>
 
+                {/* ── Guided Wizard Mode ───────────────────────────────────────────── */}
+                <AnimatePresence mode="wait">
+                {wizardMode && !generatedDraft && (
+                    <motion.div
+                        key="guided"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="max-w-2xl mx-auto bg-white/90 backdrop-blur-sm rounded-3xl border border-gray-200 p-8 shadow-lg mb-10"
+                    >
+                        <SmartWizard
+                            steps={DRAFT_WIZARD_STEPS}
+                            onComplete={handleWizardComplete}
+                            isLoading={isGenerating}
+                            accentColor="bg-saffron"
+                            reviewTitle="Review Document Details"
+                        />
+                    </motion.div>
+                )}
+                {isGenerating && wizardMode && (
+                    <motion.div
+                        key="generating"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="max-w-2xl mx-auto text-center py-20"
+                    >
+                        <div className="w-16 h-16 rounded-2xl bg-saffron/10 flex items-center justify-center mx-auto mb-4">
+                            <Sparkles className="w-8 h-8 text-saffron animate-pulse" />
+                        </div>
+                        <h3 className="text-xl font-serif font-bold text-gray-900 mb-2">Drafting your document...</h3>
+                        <p className="text-gray-500 text-sm">AI is generating a professionally formatted legal document tailored to your details.</p>
+                    </motion.div>
+                )}
+                {generatedDraft && wizardMode && (
+                    <motion.div
+                        key="wizard-result"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="max-w-3xl mx-auto bg-white/90 backdrop-blur-sm rounded-3xl border border-gray-200 p-8 shadow-lg mb-10"
+                    >
+                        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+                            <h3 className="text-xl font-serif font-bold text-gray-900">Generated Document</h3>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(generatedDraft); toast.success("Copied!"); }} className="rounded-xl">
+                                    <Copy className="w-4 h-4 mr-1" /> Copy
+                                </Button>
+                                <Button size="sm" onClick={handleDownloadPDF} className="btn-saffron rounded-xl">
+                                    <Download className="w-4 h-4 mr-1" /> PDF
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => { setGeneratedDraft(""); }} className="rounded-xl gap-1">
+                                    <RefreshCw className="w-4 h-4" /> New
+                                </Button>
+                            </div>
+                        </div>
+                        <Textarea
+                            value={generatedDraft}
+                            onChange={(e) => setGeneratedDraft(e.target.value)}
+                            className="w-full min-h-[540px] border-0 bg-gray-50/30 text-gray-900 font-serif text-base leading-relaxed p-6 resize-none focus:ring-0 rounded-2xl"
+                        />
+                        <div className="mt-4 flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">
+                            <ShieldCheck className="w-3 h-3 text-green-600" />
+                            AI-drafted document — review before signing. Not a substitute for professional legal advice.
+                        </div>
+                    </motion.div>
+                )}
+                </AnimatePresence>
+
+                {/* ── Quick Draft Mode (original UI) ──────────────────────────────── */}
+                {!wizardMode && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
+
 
                     {/* Configuration Panel */}
                     <motion.div 
@@ -364,7 +619,9 @@ const DraftingPage = () => {
                     </motion.div>
 
                 </div>
+                )} {/* end !wizardMode */}
             </div>
+
             {!isFocusMode && <Footer />}
         </div>
     );

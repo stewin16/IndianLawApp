@@ -1,84 +1,167 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import TricolorBackground from "@/components/TricolorBackground";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-    ArrowLeft, Sparkles, Loader2, CheckCircle,
-    ExternalLink, Copy, Unlock, AlertCircle, ShieldCheck, Scale
-} from "lucide-react";
+import { ArrowLeft, Unlock, ShieldCheck, AlertCircle, Scale, Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { generateLegalContent, parseModelJson } from "@/services/groqService";
+import SmartWizard, { WizardStep } from "@/components/SmartWizard";
 
 interface BailResult {
     bailable: boolean;
-    conditions: string[];
     section: string;
     provision: string;
+    conditions: string[];
     reasoning: string;
+    bail_amount_range?: string;
+    recommended_court?: string;
 }
 
+const WIZARD_STEPS: WizardStep[] = [
+    {
+        title: "The Offense",
+        subtitle: "What is the alleged crime?",
+        icon: "⚖️",
+        fields: [
+            {
+                key: "offenseType",
+                label: "Type of Offense",
+                type: "chips",
+                chips: ["Theft", "Cheating / Fraud", "Assault", "Murder", "Kidnapping", "Drunk Driving", "Dowry Harassment", "Cybercrime", "Drug Possession"],
+                placeholder: "Or describe the offense...",
+                required: true,
+            },
+            {
+                key: "offenseDescription",
+                label: "Describe the Alleged Offense",
+                type: "textarea",
+                placeholder: "Provide details about what the accused is alleged to have done...",
+                required: true,
+                minLength: 20,
+            },
+            {
+                key: "sectionIfKnown",
+                label: "Section Number (if known)",
+                type: "text",
+                placeholder: "e.g., BNS 303, IPC 420 — leave blank if unknown",
+                hint: "We will identify the correct section automatically if you leave this blank.",
+            },
+        ],
+    },
+    {
+        title: "Accused Profile",
+        subtitle: "Background of the accused",
+        icon: "👤",
+        fields: [
+            {
+                key: "accusedBackground",
+                label: "Criminal History",
+                type: "select",
+                options: [
+                    { value: "first_time", label: "First-time offender — no prior criminal record" },
+                    { value: "minor_prior", label: "Minor prior offenses (bailable)" },
+                    { value: "prior_serious", label: "Prior serious convictions" },
+                    { value: "unknown", label: "Not known" },
+                ],
+            },
+            {
+                key: "accusedAge",
+                label: "Age of Accused",
+                type: "select",
+                options: [
+                    { value: "juvenile", label: "Juvenile (below 18)" },
+                    { value: "adult", label: "Adult (18-60)" },
+                    { value: "senior", label: "Senior Citizen (60+)" },
+                ],
+            },
+            {
+                key: "flightRisk",
+                label: "Is there a flight risk?",
+                type: "select",
+                options: [
+                    { value: "low", label: "Low — accused has local ties, stable employment" },
+                    { value: "medium", label: "Medium — unclear ties to area" },
+                    { value: "high", label: "High — may flee or tamper with evidence" },
+                ],
+            },
+        ],
+    },
+    {
+        title: "Court & Jurisdiction",
+        subtitle: "Where will bail be applied for?",
+        icon: "🏛️",
+        fields: [
+            {
+                key: "court",
+                label: "Which Court?",
+                type: "chips",
+                chips: ["Magistrate Court", "Sessions Court", "High Court", "Supreme Court"],
+                placeholder: "",
+                required: true,
+            },
+            {
+                key: "state",
+                label: "State / UT",
+                type: "text",
+                placeholder: "e.g., Maharashtra, Delhi, Karnataka",
+                required: true,
+            },
+            {
+                key: "additionalContext",
+                label: "Any other relevant context?",
+                type: "textarea",
+                placeholder: "e.g., victim's condition, media attention, co-accused, ongoing investigation status...",
+            },
+        ],
+    },
+];
+
 const BailCheckerPage = () => {
-    const [offense, setOffense] = useState("");
-    const [section, setSection] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState<BailResult | null>(null);
 
-    const handleSubmit = async () => {
-        if (!offense.trim()) return;
-
+    const handleComplete = async (data: Record<string, string>) => {
         setIsLoading(true);
         setResult(null);
 
-        try {
-            const systemPrompt = `You are an expert Indian Criminal Law Consultant. 
-            Analyze the bail eligibility for the given offense description and section. 
-            Output must be a valid JSON object with this exact structure: 
-            { 
-              "bailable": boolean, 
-              "section": "string representing applicable BNS/IPC section", 
-              "provision": "string summarizing the legal provision", 
-              "conditions": ["array of strings for bail conditions"], 
-              "reasoning": "detailed legal reasoning for the classification" 
-            }`;
+        const systemPrompt = `You are an expert Indian Criminal Law Consultant specialising in bail jurisprudence.
+Analyse the bail eligibility for the given offense and circumstances under the Bharatiya Nyaya Sanhita (BNS) 2023 and Bharatiya Nagarik Suraksha Sanhita (BNSS) 2023.
+Output ONLY a valid JSON object in this EXACT structure — no markdown, no explanation:
+{
+  "bailable": true or false,
+  "section": "applicable BNS/IPC section number",
+  "provision": "brief description of the legal provision",
+  "conditions": ["condition 1", "condition 2"],
+  "reasoning": "detailed legal reasoning",
+  "bail_amount_range": "e.g., ₹10,000 - ₹50,000 surety",
+  "recommended_court": "which court to approach"
+}`;
 
-            const prompt = `Analyze bail eligibility for:
-            Offense: ${offense}
-            Section (if provided): ${section}`;
-            
+        const prompt = `Analyse bail eligibility for:
+Offense: ${data.offenseType}. Details: ${data.offenseDescription}.
+Section (if known): ${data.sectionIfKnown || "To be identified"}.
+Accused background: ${data.accusedBackground || "unknown"}.
+Age: ${data.accusedAge || "adult"}.
+Flight risk: ${data.flightRisk || "unknown"}.
+Court: ${data.court}.
+State: ${data.state}.
+Additional context: ${data.additionalContext || "None"}.`;
+
+        try {
             const content = await generateLegalContent(prompt, systemPrompt);
-            const parsed = parseModelJson<BailResult>(content, "bail eligibility", "object");
-            
+            const parsed = parseModelJson<BailResult>(content);
+            if (typeof parsed.bailable === "undefined") throw new Error("Unexpected AI response. Please try again.");
             setResult(parsed);
-            toast.success("Bail eligibility analyzed!");
+            toast.success("Bail analysis complete!");
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : "Unknown error";
-            console.error("Bail Check Error:", error);
-            toast.error(`Analysis Failed: ${message}`);
+            toast.error(`Analysis failed: ${message}`);
         } finally {
             setIsLoading(false);
         }
     };
-
-    const copyResult = () => {
-        if (result) {
-            const text = `Bail Eligibility: ${result.bailable ? 'Bailable' : 'Non-Bailable'}\nSection: ${result.section}\nProvision: ${result.provision}\nConditions: ${result.conditions.join(', ')}\nReasoning: ${result.reasoning}`;
-            navigator.clipboard.writeText(text);
-            toast.success("Copied to clipboard");
-        }
-    };
-
-    // Common offenses for quick selection
-    const commonOffenses = [
-        "Theft",
-        "Cheating",
-        "Assault",
-        "Dowry harassment",
-        "Drunk driving",
-        "Cybercrime"
-    ];
 
     return (
         <div className="min-h-screen text-gray-900">
@@ -86,227 +169,107 @@ const BailCheckerPage = () => {
             <Header />
 
             <div className="container max-w-4xl mx-auto pt-8 pb-20 px-4 md:px-6">
-
-                {/* Back Button */}
-                <Link
-                    to="/features"
-                    className="inline-flex items-center gap-2 text-gray-500 hover:text-saffron mb-6 transition-colors"
-                >
+                <Link to="/features" className="inline-flex items-center gap-2 text-gray-500 hover:text-saffron mb-6 transition-colors">
                     <ArrowLeft className="w-4 h-4" />
                     Back to AI Tools
                 </Link>
 
-                {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-8"
-                >
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-600 to-green-500 flex items-center justify-center">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+                    <div className="flex items-center gap-4 mb-2">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-600 to-green-500 flex items-center justify-center shadow-lg">
                             <Unlock className="w-7 h-7 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-serif font-bold text-gray-900">
-                                Bail Eligibility Checker
-                            </h1>
-                            <p className="text-gray-500">Check if an offense is bailable under Indian law</p>
+                            <h1 className="text-3xl font-serif font-bold text-gray-900">Bail Eligibility Checker</h1>
+                            <p className="text-gray-500">AI-guided analysis based on BNS 2023 & BNSS 2023</p>
                         </div>
                     </div>
                 </motion.div>
 
-                {/* Input Form */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200 p-6 mb-6"
-                >
-                    {/* Quick Selection */}
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Quick Select Common Offenses
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                            {commonOffenses.map((off) => (
-                                <button
-                                    key={off}
-                                    onClick={() => setOffense(off)}
-                                    className={`px-3 py-1.5 rounded-full text-sm transition-all ${offense === off
-                                        ? "bg-green-600 text-white"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                        }`}
-                                >
-                                    {off}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Offense Description */}
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Offense Description *
-                        </label>
-                        <Textarea
-                            value={offense}
-                            onChange={(e) => setOffense(e.target.value)}
-                            placeholder="Describe the offense for which you want to check bail eligibility..."
-                            className="min-h-[100px] bg-white border-gray-200"
-                        />
-                    </div>
-
-                    {/* Section Number (Optional) */}
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Section Number (if known)
-                        </label>
-                        <input
-                            type="text"
-                            value={section}
-                            onChange={(e) => setSection(e.target.value)}
-                            placeholder="e.g., BNS 303, IPC 420"
-                            className="w-full px-4 py-2 rounded-lg bg-white border border-gray-200 focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
-                        />
-                    </div>
-
-                    {/* Submit Button */}
-                    <Button
-                        onClick={handleSubmit}
-                        disabled={isLoading || !offense.trim()}
-                        className="w-full h-12 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-medium rounded-xl"
-                    >
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                Checking Eligibility...
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles className="w-5 h-5 mr-2" />
-                                Check Bail Eligibility
-                            </>
-                        )}
-                    </Button>
-                </motion.div>
-
-                {/* Result Display */}
-                {result && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-white/90 backdrop-blur-sm rounded-2xl border border-green-200 p-6"
-                    >
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle className="w-5 h-5 text-green-600" />
-                                <span className="font-semibold text-green-600">Bail Eligibility Analysis</span>
-                            </div>
-                            <Button
-                                onClick={copyResult}
-                                variant="outline"
-                                size="sm"
-                                className="text-gray-500"
-                            >
-                                <Copy className="w-4 h-4 mr-1" />
-                                Copy
-                            </Button>
-                        </div>
-
-                        <div className="space-y-6 text-gray-700">
-                             <div className={`p-4 rounded-xl border flex items-center gap-4 ${result.bailable ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${result.bailable ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                    {result.bailable ? <ShieldCheck className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+                <AnimatePresence mode="wait">
+                    {!result ? (
+                        <motion.div
+                            key="wizard"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="bg-white/90 backdrop-blur-sm rounded-3xl border border-gray-200 p-8 shadow-lg"
+                        >
+                            <SmartWizard
+                                steps={WIZARD_STEPS}
+                                onComplete={handleComplete}
+                                isLoading={isLoading}
+                                accentColor="bg-green-600"
+                                reviewTitle="Review Bail Details"
+                            />
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="result"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-5"
+                        >
+                            {/* Verdict banner */}
+                            <div className={`p-6 rounded-3xl border flex items-center gap-5 ${result.bailable ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${result.bailable ? "bg-green-100" : "bg-red-100"}`}>
+                                    {result.bailable ? <ShieldCheck className="w-8 h-8 text-green-600" /> : <AlertCircle className="w-8 h-8 text-red-600" />}
                                 </div>
                                 <div>
-                                    <p className="text-xs uppercase font-bold tracking-wider opacity-60">Eligibility Status</p>
-                                    <p className={`text-xl font-black ${result.bailable ? 'text-green-700' : 'text-red-700'}`}>
-                                        {result.bailable ? 'BAILABLE OFFENCE' : 'NON-BAILABLE OFFENCE'}
+                                    <p className="text-xs font-bold uppercase tracking-widest opacity-60 mb-1">Eligibility Verdict</p>
+                                    <p className={`text-2xl font-black ${result.bailable ? "text-green-700" : "text-red-700"}`}>
+                                        {result.bailable ? "✅ BAILABLE OFFENCE" : "❌ NON-BAILABLE OFFENCE"}
                                     </p>
+                                    {result.recommended_court && (
+                                        <p className="text-sm text-gray-600 mt-1">Apply for bail at: <strong>{result.recommended_court}</strong></p>
+                                    )}
                                 </div>
                             </div>
 
+                            {/* Detail cards */}
                             <div className="grid md:grid-cols-2 gap-4">
-                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                    <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                                        <Scale className="w-4 h-4 text-green-600" />
-                                        Legal Provisions
+                                <div className="bg-white/90 rounded-2xl border border-gray-200 p-5">
+                                    <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2 text-sm">
+                                        <Scale className="w-4 h-4 text-green-600" /> Legal Section
                                     </h4>
-                                    <p className="text-sm font-bold text-navy-india">{result.section}</p>
+                                    <p className="font-bold text-navy-india">{result.section}</p>
                                     <p className="text-xs text-gray-600 mt-1">{result.provision}</p>
                                 </div>
+                                {result.bail_amount_range && (
+                                    <div className="bg-white/90 rounded-2xl border border-gray-200 p-5">
+                                        <h4 className="font-bold text-gray-900 mb-2 text-sm">💰 Bail Amount Range</h4>
+                                        <p className="font-bold text-navy-india">{result.bail_amount_range}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Subject to court's discretion</p>
+                                    </div>
+                                )}
+                            </div>
 
-                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                    <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-amber-600" />
-                                        Analysis Reasoning
-                                    </h4>
-                                    <p className="text-xs text-gray-600 leading-relaxed">
-                                        {result.reasoning}
-                                    </p>
+                            {result.conditions?.length > 0 && (
+                                <div className="bg-white/90 rounded-2xl border border-gray-200 p-5">
+                                    <h4 className="font-bold text-gray-900 mb-3 text-sm">📋 Bail Conditions Likely to Be Imposed</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {result.conditions.map((c, i) => (
+                                            <span key={i} className="px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-100">{c}</span>
+                                        ))}
+                                    </div>
                                 </div>
+                            )}
+
+                            <div className="bg-white/90 rounded-2xl border border-gray-200 p-5">
+                                <h4 className="font-bold text-gray-900 mb-2 text-sm">🧠 AI Legal Reasoning</h4>
+                                <p className="text-sm text-gray-700 leading-relaxed">{result.reasoning}</p>
                             </div>
 
-                            <div>
-                                <h4 className="font-bold text-gray-900 mb-2">Bail Conditions</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {result.conditions.map((c, i) => (
-                                        <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-100">
-                                            {c}
-                                        </span>
-                                    ))}
-                                </div>
+                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-700">
+                                <strong>Note:</strong> Bail decisions are ultimately at the court's discretion. Consult a criminal lawyer before filing a bail application.
                             </div>
 
-                            <div className="p-4 bg-green-50/50 rounded-xl border border-green-100">
-                                <h4 className="font-bold text-gray-900 mb-1">AI Reasoning & Recommendation</h4>
-                                <p className="text-sm text-gray-700 leading-relaxed">
-                                    {result.reasoning}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Important Note */}
-                        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                            <p className="text-sm font-medium text-blue-800 mb-2">Important Note:</p>
-                            <p className="text-xs text-blue-700">
-                                Bail decisions are ultimately at the court's discretion. Factors like criminal history,
-                                flight risk, and case specifics can affect bail grant. Always consult a criminal lawyer
-                                for bail applications.
-                            </p>
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* Resources */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4"
-                >
-                    <a
-                        href="https://ecourts.gov.in"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-4 rounded-xl bg-white/80 border border-gray-200 hover:border-green-500/30 transition-all group"
-                    >
-                        <ExternalLink className="w-5 h-5 text-gray-400 group-hover:text-green-600 mb-2" />
-                        <span className="block font-medium text-gray-900">eCourts</span>
-                        <span className="text-xs text-gray-500">Check case status</span>
-                    </a>
-
-                    <a
-                        href="https://nalsa.gov.in"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-4 rounded-xl bg-white/80 border border-gray-200 hover:border-green-500/30 transition-all group"
-                    >
-                        <ExternalLink className="w-5 h-5 text-gray-400 group-hover:text-green-600 mb-2" />
-                        <span className="block font-medium text-gray-900">NALSA</span>
-                        <span className="text-xs text-gray-500">Free legal aid for bail</span>
-                    </a>
-                </motion.div>
+                            <Button variant="outline" onClick={() => setResult(null)} className="gap-2 rounded-xl">
+                                <RefreshCw className="w-4 h-4" /> Check Another Case
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );

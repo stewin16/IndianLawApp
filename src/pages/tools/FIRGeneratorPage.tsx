@@ -1,61 +1,165 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import TricolorBackground from "@/components/TricolorBackground";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import {
-    ArrowLeft, Sparkles, Loader2, CheckCircle, AlertTriangle,
-    ExternalLink, Copy, FileWarning, Calendar, MapPin
-} from "lucide-react";
+import { ArrowLeft, FileWarning, CheckCircle, Copy, Download, AlertTriangle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { generateLegalContent, parseModelJson } from "@/services/groqService";
+import { exportStructuredPdf, toPlainText } from "@/lib/pdfExport";
+import SmartWizard, { WizardStep } from "@/components/SmartWizard";
+
+interface FIRResult {
+    draft: string;
+    relevant_sections: string[];
+    instructions: string[];
+}
+
+const WIZARD_STEPS: WizardStep[] = [
+    {
+        title: "Who are you?",
+        subtitle: "Tell us about the complainant",
+        icon: "👤",
+        fields: [
+            {
+                key: "complainantName",
+                label: "Your Full Name",
+                type: "text",
+                placeholder: "e.g., Ramesh Kumar",
+                required: true,
+            },
+            {
+                key: "complainantAddress",
+                label: "Your Address",
+                type: "text",
+                placeholder: "e.g., 123, MG Road, Mumbai - 400001",
+                required: true,
+            },
+            {
+                key: "contactNumber",
+                label: "Contact Number",
+                type: "text",
+                placeholder: "e.g., 9876543210",
+            },
+        ],
+    },
+    {
+        title: "The Incident",
+        subtitle: "When and where did it happen?",
+        icon: "📍",
+        fields: [
+            {
+                key: "incidentDate",
+                label: "Date of Incident",
+                type: "date",
+                required: true,
+            },
+            {
+                key: "incidentTime",
+                label: "Approximate Time",
+                type: "text",
+                placeholder: "e.g., around 9:30 PM",
+            },
+            {
+                key: "incidentLocation",
+                label: "Location of Incident",
+                type: "text",
+                placeholder: "Full address or landmark where it occurred",
+                required: true,
+            },
+            {
+                key: "policeStation",
+                label: "Nearest Police Station",
+                type: "text",
+                placeholder: "e.g., Andheri Police Station",
+            },
+        ],
+    },
+    {
+        title: "What Happened?",
+        subtitle: "Describe the incident in detail",
+        icon: "📋",
+        fields: [
+            {
+                key: "crimeType",
+                label: "Type of Crime / Offense",
+                type: "chips",
+                chips: ["Theft", "Assault", "Fraud / Cheating", "Domestic Violence", "Cybercrime", "Robbery", "Sexual Harassment", "Other"],
+                placeholder: "Or describe the offense type...",
+                required: true,
+            },
+            {
+                key: "incidentDescription",
+                label: "Detailed Description",
+                type: "textarea",
+                placeholder: "Describe exactly what happened — what was done, how, by whom, and what loss or injury occurred...",
+                required: true,
+                minLength: 50,
+                hint: "The more detail you provide, the better the FIR draft will be.",
+            },
+        ],
+    },
+    {
+        title: "The Accused",
+        subtitle: "Details about the person(s) involved",
+        icon: "🔍",
+        fields: [
+            {
+                key: "accusedKnown",
+                label: "Is the accused known to you?",
+                type: "select",
+                options: [
+                    { value: "yes_known", label: "Yes — I know who it is" },
+                    { value: "partially", label: "Partially — I have a description" },
+                    { value: "unknown", label: "No — accused is unknown" },
+                ],
+            },
+            {
+                key: "accusedDetails",
+                label: "Accused Details (if known)",
+                type: "textarea",
+                placeholder: "Name, address, description, vehicle number, or any other identifying information...",
+                hint: "Leave blank if accused is completely unknown.",
+            },
+            {
+                key: "witnesses",
+                label: "Witnesses (if any)",
+                type: "text",
+                placeholder: "e.g., Suresh Patel (neighbour), CCTV at location",
+            },
+        ],
+    },
+];
 
 const FIRGeneratorPage = () => {
-    const [formData, setFormData] = useState({
-        complainantName: "",
-        incidentDate: "",
-        incidentLocation: "",
-        incidentDescription: "",
-        accusedDetails: ""
-    });
     const [isLoading, setIsLoading] = useState(false);
-    const [result, setResult] = useState<{
-        draft: string;
-        relevant_sections: string[];
-        instructions: string[];
-    } | null>(null);
+    const [result, setResult] = useState<FIRResult | null>(null);
 
-    const handleSubmit = async () => {
-        if (!formData.incidentDescription.trim()) return;
-
+    const handleComplete = async (data: Record<string, string>) => {
         setIsLoading(true);
         setResult(null);
 
-        try {
-            const systemPrompt = `You are an expert Indian Police and Legal Assistant. 
-            Generate a detailed and professionally formatted FIR (First Information Report) complaint draft. 
-            Identify the likely Sections under the Bharatiya Nyaya Sanhita (BNS) or Indian Penal Code (IPC) as applicable. 
-            Provide clear next steps for the complainant. 
-            Output must be a valid JSON object with this exact structure: 
-            { "draft": "full text of the FIR", "relevant_sections": ["string"], "instructions": ["string"] }`;
+        const systemPrompt = `You are an expert Indian Police and Legal Assistant specialising in FIR drafting.
+Generate a complete, professionally formatted FIR (First Information Report) complaint draft based on the given details.
+Identify the applicable sections under the Bharatiya Nyaya Sanhita (BNS 2023) and/or Indian Penal Code (IPC).
+Output ONLY a valid JSON object in this EXACT structure — no explanation, no markdown wrapper:
+{ "draft": "full multi-paragraph FIR text", "relevant_sections": ["BNS 103", "BNS 316", "..."], "instructions": ["Step 1...", "Step 2..."] }`;
 
-            const prompt = `Generate an FIR draft for the following incident:
-            Complainant: ${formData.complainantName}
-            Date: ${formData.incidentDate}
-            Location: ${formData.incidentLocation}
-            Accused Details: ${formData.accusedDetails}
-            Description of Incident: ${formData.incidentDescription}`;
-            
+        const prompt = `Generate an FIR draft with these details:
+Complainant: ${data.complainantName}, ${data.complainantAddress}. Contact: ${data.contactNumber || "N/A"}.
+Incident Date & Time: ${data.incidentDate} ${data.incidentTime || ""}.
+Incident Location: ${data.incidentLocation}.
+Nearest Police Station: ${data.policeStation || "To be determined"}.
+Type of Crime: ${data.crimeType}.
+Full Description: ${data.incidentDescription}.
+Accused: ${data.accusedKnown || "Unknown"}. Details: ${data.accusedDetails || "Unknown"}.
+Witnesses: ${data.witnesses || "None identified"}.`;
+
+        try {
             const content = await generateLegalContent(prompt, systemPrompt);
-            const parsed = parseModelJson<{
-                draft: string;
-                relevant_sections: string[];
-                instructions: string[];
-            }>(content, "FIR generation", "object");
-            
+            const parsed = parseModelJson<FIRResult>(content);
+            if (!parsed.draft) throw new Error("AI returned an unexpected response. Please try again.");
             setResult(parsed);
             toast.success("FIR Draft generated successfully!");
         } catch (error: unknown) {
@@ -67,8 +171,20 @@ const FIRGeneratorPage = () => {
         }
     };
 
-    const copyResult = () => {
-        if (result) navigator.clipboard.writeText(result.draft);
+    const handleDownload = async () => {
+        if (!result) return;
+        try {
+            await exportStructuredPdf({
+                title: "FIR Complaint Draft",
+                fileName: "fir_complaint_draft.pdf",
+                metadata: [`Date: ${new Date().toLocaleDateString()}`, `Sections: ${result.relevant_sections.join(", ")}`],
+                sections: [{ label: "FIR Draft", text: toPlainText(result.draft) }],
+                footer: "AI-generated draft — review before submission. Not a substitute for legal advice.",
+            });
+            toast.success("PDF Downloaded!");
+        } catch {
+            toast.error("PDF export failed.");
+        }
     };
 
     return (
@@ -76,234 +192,102 @@ const FIRGeneratorPage = () => {
             <TricolorBackground intensity="strong" showOrbs={true} />
             <Header />
 
-            <div className="container max-w-4xl mx-auto pt-24 pb-20 px-4 md:px-6">
-
-                {/* Back Button */}
-                <Link
-                    to="/features"
-                    className="inline-flex items-center gap-2 text-gray-500 hover:text-saffron mb-6 transition-colors"
-                >
+            <div className="container max-w-4xl mx-auto pt-8 pb-20 px-4 md:px-6">
+                <Link to="/features" className="inline-flex items-center gap-2 text-gray-500 hover:text-saffron mb-6 transition-colors">
                     <ArrowLeft className="w-4 h-4" />
                     Back to AI Tools
                 </Link>
 
                 {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-8"
-                >
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+                    <div className="flex items-center gap-4 mb-2">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center shadow-lg">
                             <FileWarning className="w-7 h-7 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-serif font-bold text-gray-900">
-                                FIR Complaint Generator
-                            </h1>
-                            <p className="text-gray-500">Generate legally formatted FIR complaint drafts</p>
+                            <h1 className="text-3xl font-serif font-bold text-gray-900">FIR Complaint Generator</h1>
+                            <p className="text-gray-500">AI-guided intake → legally formatted FIR draft</p>
                         </div>
                     </div>
                 </motion.div>
 
-                {/* Input Form */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200 p-6 mb-6"
-                >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        {/* Complainant Name */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Complainant Name
-                            </label>
-                            <Input
-                                value={formData.complainantName}
-                                onChange={(e) => setFormData({ ...formData, complainantName: e.target.value })}
-                                placeholder="Your full name"
-                                className="bg-white border-gray-200"
+                <AnimatePresence mode="wait">
+                    {!result ? (
+                        <motion.div
+                            key="wizard"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="bg-white/90 backdrop-blur-sm rounded-3xl border border-gray-200 p-8 shadow-lg"
+                        >
+                            <SmartWizard
+                                steps={WIZARD_STEPS}
+                                onComplete={handleComplete}
+                                isLoading={isLoading}
+                                accentColor="bg-red-600"
+                                reviewTitle="Review FIR Details"
                             />
-                        </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="result"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-6"
+                        >
+                            {/* Result header */}
+                            <div className="bg-white/90 backdrop-blur-sm rounded-3xl border border-green-200 p-6">
+                                <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle className="w-5 h-5 text-green-600" />
+                                        <span className="font-bold text-green-700 text-lg">FIR Draft Generated</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(result.draft); toast.success("Copied!"); }}>
+                                            <Copy className="w-4 h-4 mr-1" /> Copy
+                                        </Button>
+                                        <Button size="sm" onClick={handleDownload} className="bg-red-600 hover:bg-red-700 text-white">
+                                            <Download className="w-4 h-4 mr-1" /> PDF
+                                        </Button>
+                                    </div>
+                                </div>
 
-                        {/* Incident Date */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                <Calendar className="w-4 h-4 inline mr-1" />
-                                Incident Date
-                            </label>
-                            <Input
-                                type="date"
-                                value={formData.incidentDate}
-                                onChange={(e) => setFormData({ ...formData, incidentDate: e.target.value })}
-                                className="bg-white border-gray-200"
-                            />
-                        </div>
-                    </div>
+                                <div className="font-mono text-sm text-gray-700 bg-gray-50 rounded-xl p-5 whitespace-pre-wrap leading-relaxed border border-gray-100">
+                                    {result.draft}
+                                </div>
 
-                    {/* Incident Location */}
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            <MapPin className="w-4 h-4 inline mr-1" />
-                            Incident Location
-                        </label>
-                        <Input
-                            value={formData.incidentLocation}
-                            onChange={(e) => setFormData({ ...formData, incidentLocation: e.target.value })}
-                            placeholder="Full address where the incident occurred"
-                            className="bg-white border-gray-200"
-                        />
-                    </div>
+                                {result.relevant_sections?.length > 0 && (
+                                    <div className="mt-5">
+                                        <p className="text-sm font-bold text-gray-900 mb-2">Applicable Sections:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {result.relevant_sections.map((sec, i) => (
+                                                <span key={i} className="px-3 py-1 bg-red-50 text-red-700 rounded-full text-xs font-bold border border-red-100">{sec}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
-                    {/* Incident Description */}
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Incident Description *
-                        </label>
-                        <Textarea
-                            value={formData.incidentDescription}
-                            onChange={(e) => setFormData({ ...formData, incidentDescription: e.target.value })}
-                            placeholder="Describe what happened in detail:
-• What was the nature of the crime/incident?
-• How did it happen?
-• What were the circumstances?
-• What loss or injury was caused?
-• Were there any witnesses?"
-                            className="min-h-[150px] bg-white border-gray-200"
-                        />
-                    </div>
+                                {result.instructions?.length > 0 && (
+                                    <div className="mt-5 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                                        <p className="text-sm font-bold text-blue-800 mb-2">Next Steps:</p>
+                                        <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
+                                            {result.instructions.map((inst, i) => <li key={i}>{inst}</li>)}
+                                        </ol>
+                                    </div>
+                                )}
 
-                    {/* Accused Details */}
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Accused Details (if known)
-                        </label>
-                        <Textarea
-                            value={formData.accusedDetails}
-                            onChange={(e) => setFormData({ ...formData, accusedDetails: e.target.value })}
-                            placeholder="Name, description, address, or any identifying information of the accused"
-                            className="min-h-[80px] bg-white border-gray-200"
-                        />
-                    </div>
-
-                    {/* Submit Button */}
-                    <Button
-                        onClick={handleSubmit}
-                        disabled={isLoading || !formData.incidentDescription.trim()}
-                        className="w-full h-12 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white font-medium rounded-xl"
-                    >
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                Generating FIR Draft...
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles className="w-5 h-5 mr-2" />
-                                Generate FIR Draft
-                            </>
-                        )}
-                    </Button>
-                </motion.div>
-
-                {/* Result Display */}
-                {result && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-white/90 backdrop-blur-sm rounded-2xl border border-green-200 p-6"
-                    >
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle className="w-5 h-5 text-green-600" />
-                                <span className="font-semibold text-green-600">Generated FIR Draft</span>
-                            </div>
-                            <Button
-                                onClick={copyResult}
-                                variant="outline"
-                                size="sm"
-                                className="text-gray-500"
-                            >
-                                <Copy className="w-4 h-4 mr-1" />
-                                Copy
-                            </Button>
-                        </div>
-
-                        <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg">
-                            {result.draft}
-                        </div>
-
-                        {/* Relevant Sections */}
-                        {result.relevant_sections.length > 0 && (
-                            <div className="mt-6">
-                                <p className="text-sm font-bold text-gray-900 mb-2">Relevant Sections:</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {result.relevant_sections.map((sec, idx) => (
-                                        <span key={idx} className="bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold border border-red-100">
-                                            {sec}
-                                        </span>
-                                    ))}
+                                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                    <p className="text-xs text-amber-700">This is an AI-generated draft. Review carefully before submission. For serious crimes, consult a lawyer.</p>
                                 </div>
                             </div>
-                        )}
 
-                        {/* Instructions */}
-                        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                            <p className="text-sm font-medium text-blue-800 mb-2">Next Steps:</p>
-                            <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                                {result.instructions.map((inst, idx) => (
-                                    <li key={idx}>{inst}</li>
-                                ))}
-                            </ol>
-                        </div>
-
-                        {/* Disclaimer */}
-                        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                            <div className="flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-                                <p className="text-xs text-amber-700">
-                                    This is an AI-generated draft. Review carefully before submission.
-                                    Police may ask you to modify details. For serious crimes,
-                                    consider consulting a lawyer.
-                                </p>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* Helpful Links */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="mt-8"
-                >
-                    <h3 className="font-medium text-gray-900 mb-3">Helpful Resources</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <a
-                            href="https://cybercrime.gov.in"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-4 rounded-xl bg-white/80 border border-gray-200 hover:border-saffron/30 transition-all group"
-                        >
-                            <ExternalLink className="w-5 h-5 text-gray-400 group-hover:text-saffron mb-2" />
-                            <span className="block font-medium text-gray-900">Cyber Crime Portal</span>
-                            <span className="text-xs text-gray-500">For online crimes</span>
-                        </a>
-
-                        <a
-                            href="https://nalsa.gov.in"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-4 rounded-xl bg-white/80 border border-gray-200 hover:border-saffron/30 transition-all group"
-                        >
-                            <ExternalLink className="w-5 h-5 text-gray-400 group-hover:text-saffron mb-2" />
-                            <span className="block font-medium text-gray-900">NALSA</span>
-                            <span className="text-xs text-gray-500">Free legal aid</span>
-                        </a>
-                    </div>
-                </motion.div>
+                            <Button variant="outline" onClick={() => setResult(null)} className="gap-2 rounded-xl">
+                                <RefreshCw className="w-4 h-4" /> Start New FIR
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );
